@@ -59,7 +59,6 @@ function App() {
   }, [])
 
   const handleLogin = (user) => {
-    console.log('Login bem-sucedido:', user)
     setCurrentUser(user)
     localStorage.setItem('currentUser', JSON.stringify(user))
   }
