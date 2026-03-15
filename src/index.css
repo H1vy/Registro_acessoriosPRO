@@ -521,7 +521,7 @@ tr:hover td {
   align-items: center;
 }
 
-.input-with-icon svg {
+.input-with-icon > svg {
   position: absolute;
   left: 1rem;
   top: 50%;
