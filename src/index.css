@@ -470,7 +470,7 @@ tr:hover td {
 .login-card {
   width: 100%;
   max-width: 420px;
-  padding: 3.5rem 2.5rem;
+  padding: 1.8rem 2rem;
   border-radius: 32px;
   position: relative;
   z-index: 1;
@@ -485,9 +485,9 @@ tr:hover td {
 }
 
 .login-header h2 {
-  font-size: 2.2rem;
+  font-size: 2rem;
   font-weight: 800;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.1rem;
   letter-spacing: -0.02em;
   background: linear-gradient(to bottom, #fff, #94a3b8);
   background-clip: text;
@@ -497,26 +497,26 @@ tr:hover td {
 
 .login-header p {
   color: var(--text-secondary);
-  font-size: 1rem;
-  margin-bottom: 2.5rem;
+  font-size: 0.95rem;
+  margin-bottom: 1rem;
 }
 
 .login-logo {
-  width: 72px;
-  height: 72px;
+  width: 68px;
+  height: 68px;
   background: linear-gradient(135deg, var(--bg-accent) 0%, rgba(56, 189, 248, 0.1) 100%);
   color: var(--accent);
-  border-radius: 22px;
+  border-radius: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 0 auto 1.5rem;
+  margin: 0 auto 0.85rem;
   border: 1px solid rgba(56, 189, 248, 0.3);
-  box-shadow: 0 10px 20px rgba(56, 189, 248, 0.2);
+  box-shadow: 0 8px 16px rgba(56, 189, 248, 0.15);
 }
 
 .login-form .input-group {
-  margin-bottom: 1.5rem;
+  margin-bottom: 0.9rem;
 }
 
 .login-form label {
@@ -592,7 +592,7 @@ tr:hover td {
 
 .login-submit {
   width: 100%;
-  margin-top: 1.5rem;
+  margin-top: 0.75rem;
   padding: 1.1rem;
   border-radius: 16px;
   font-size: 1rem;
