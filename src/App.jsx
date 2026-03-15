@@ -5,7 +5,9 @@ import './App.css'
 import Dashboard from './components/Dashboard'
 import Movements from './components/Movements'
 import Catalog from './components/Catalog'
-import { getAllData, saveData } from './utils/db'
+import Login from './components/Login'
+import { getAllData, saveData, seedAdminUser } from './utils/db'
+import { LogOut, User } from 'lucide-react'
 
 function App() {
   const [activeTab, setActiveTab] = useState('movements')
@@ -13,10 +15,20 @@ function App() {
   const [responsibles, setResponsibles] = useState([])
   const [movements, setMovements] = useState([])
   const [loading, setLoading] = useState(true)
+  const [currentUser, setCurrentUser] = useState(null)
   
   const fileInputRef = useRef(null)
 
   useEffect(() => {
+    // Semeia o admin se necessário
+    seedAdminUser()
+
+    // Tentar recuperar sessão salva
+    const savedUser = localStorage.getItem('currentUser')
+    if (savedUser) {
+      setCurrentUser(JSON.parse(savedUser))
+    }
+
     const loadInitialData = async () => {
       try {
         let acc = await getAllData('accessories')
@@ -45,6 +57,18 @@ function App() {
 
     loadInitialData()
   }, [])
+
+  const handleLogin = (user) => {
+    setCurrentUser(user)
+    localStorage.setItem('currentUser', JSON.stringify(user))
+  }
+
+  const handleLogout = () => {
+    if (window.confirm('Deseja realmente sair?')) {
+      setCurrentUser(null)
+      localStorage.removeItem('currentUser')
+    }
+  }
 
   // Persistência Automática via useEffect
   useEffect(() => {
@@ -112,6 +136,7 @@ function App() {
             accessories={accessories} 
             responsibles={responsibles} 
             setMovements={setMovements}
+            currentUser={currentUser}
           />
         )
       case 'catalog':
@@ -121,11 +146,16 @@ function App() {
             setAccessories={setAccessories}
             responsibles={responsibles}
             setResponsibles={setResponsibles}
+            currentUser={currentUser}
           />
         )
       default:
-        return <Movements />
+        return <Movements currentUser={currentUser} />
     }
+  }
+
+  if (!currentUser) {
+    return <Login onLogin={handleLogin} />
   }
 
   return (
@@ -136,27 +166,29 @@ function App() {
           <span className="developer-tag">Hivyson Jesus Developer</span>
         </div>
         <nav>
-          <button 
-            className={`nav-btn ${activeTab === 'movements' ? 'active' : ''}`}
-            onClick={() => setActiveTab('movements')}
-          >
-            <ClipboardList size={18} />
-            Movimentação
-          </button>
-          <button 
-            className={`nav-btn ${activeTab === 'catalog' ? 'active' : ''}`}
-            onClick={() => setActiveTab('catalog')}
-          >
-            <Database size={18} />
-            Catálogo
-          </button>
-          <button 
-            className={`nav-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
-            onClick={() => setActiveTab('dashboard')}
-          >
-            <LayoutDashboard size={18} />
-            Dashboard
-          </button>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button 
+              className={`nav-btn ${activeTab === 'movements' ? 'active' : ''}`}
+              onClick={() => setActiveTab('movements')}
+            >
+              <ClipboardList size={18} />
+              Movimentação
+            </button>
+            <button 
+              className={`nav-btn ${activeTab === 'catalog' ? 'active' : ''}`}
+              onClick={() => setActiveTab('catalog')}
+            >
+              <Database size={18} />
+              Catálogo
+            </button>
+            <button 
+              className={`nav-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
+              onClick={() => setActiveTab('dashboard')}
+            >
+              <LayoutDashboard size={18} />
+              Dashboard
+            </button>
+          </div>
           
           <div className="header-actions">
             <button className="btn-icon-secondary" title="Exportar Backup JSON" onClick={exportBackup}>
@@ -174,6 +206,19 @@ function App() {
               onChange={importBackup} 
               style={{ display: 'none' }} 
             />
+
+            <div className="user-profile">
+              <div className="user-logo" style={{ width: '32px', height: '32px', background: 'var(--bg-accent)', color: 'var(--accent)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <User size={18} />
+              </div>
+              <div className="user-info">
+                <span className="user-name">{currentUser.username}</span>
+                <span className="user-role">Sessão Ativa</span>
+              </div>
+              <button className="btn-logout" onClick={handleLogout} title="Sair da conta">
+                <LogOut size={18} />
+              </button>
+            </div>
           </div>
         </nav>
       </header>

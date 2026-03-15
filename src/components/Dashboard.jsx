@@ -200,17 +200,25 @@ export default function Dashboard({ movements, accessories, responsibles }) {
         <div className="card" style={{ height: '400px' }}>
           <h3>Acessórios por Código de Fábrica</h3>
           <ResponsiveContainer width="100%" height="90%">
-            <BarChart data={accData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-              <XAxis dataKey="name" stroke="#94a3b8" />
-              <YAxis stroke="#94a3b8" />
+            <BarChart data={accData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.1)" vertical={false} />
+              <XAxis dataKey="name" stroke="#64748b" axisLine={false} tickLine={false} tick={{ fontSize: 12, fontWeight: 500 }} dy={10} />
+              <YAxis stroke="#64748b" axisLine={false} tickLine={false} tick={{ fontSize: 12, fontWeight: 500 }} />
               <Tooltip 
-                contentStyle={{ background: '#1e293b', border: '1px solid #334155' }}
-                itemStyle={{ color: '#f8fafc' }}
+                contentStyle={{ 
+                  background: 'rgba(30, 41, 59, 0.8)', 
+                  backdropFilter: 'blur(12px)',
+                  WebkitBackdropFilter: 'blur(12px)',
+                  border: '1px solid rgba(148, 163, 184, 0.2)',
+                  borderRadius: '12px',
+                  boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3)'
+                }}
+                itemStyle={{ fontSize: '0.85rem', fontWeight: 600 }}
+                cursor={{ fill: 'rgba(148, 163, 184, 0.05)' }}
               />
-              <Legend />
-              <Bar dataKey="checkout" name="Saídas" fill="#ef4444" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="return" name="Retornos" fill="#10b981" radius={[4, 4, 0, 0]} />
+              <Legend verticalAlign="top" align="right" iconType="circle" height={36} wrapperStyle={{ fontSize: '0.85rem', fontWeight: 600, paddingBottom: '10px' }} />
+              <Bar dataKey="checkout" name="Saídas" fill="#10b981" radius={[4, 4, 0, 0]} barSize={20} />
+              <Bar dataKey="return" name="Retornos" fill="#ef4444" radius={[4, 4, 0, 0]} barSize={20} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -234,8 +242,15 @@ export default function Dashboard({ movements, accessories, responsibles }) {
                 ))}
               </Pie>
               <Tooltip 
-                contentStyle={{ background: '#1e293b', border: '1px solid #334155' }}
-                itemStyle={{ color: '#f8fafc' }}
+                contentStyle={{ 
+                  background: 'rgba(30, 41, 59, 0.8)', 
+                  backdropFilter: 'blur(12px)',
+                  WebkitBackdropFilter: 'blur(12px)',
+                  border: '1px solid rgba(148, 163, 184, 0.2)',
+                  borderRadius: '12px',
+                  boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3)'
+                }}
+                itemStyle={{ fontSize: '0.85rem', fontWeight: 600, color: '#f8fafc' }}
               />
             </PieChart>
           </ResponsiveContainer>

@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { ArrowUpRight, ArrowDownLeft, ClipboardCheck, Trash2 } from 'lucide-react'
 import CustomSelect from './CustomSelect'
 
-export default function Movements({ movements, setMovements, accessories, responsibles }) {
+export default function Movements({ movements, setMovements, accessories, responsibles, currentUser }) {
   const [formData, setFormData] = useState({
     accessoryId: '',
     responsibleId: '',
@@ -20,7 +20,8 @@ export default function Movements({ movements, setMovements, accessories, respon
     const newMovement = {
       ...formData,
       id: Date.now().toString(),
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      author: currentUser?.username || 'Sistema'
     }
 
     setMovements([newMovement, ...movements])
@@ -132,6 +133,7 @@ export default function Movements({ movements, setMovements, accessories, respon
                 <th>Acessório</th>
                 <th>Responsável</th>
                 <th>O.S.</th>
+                <th>Autor</th>
                 <th style={{ textAlign: 'center' }}>Ações</th>
               </tr>
             </thead>
@@ -147,6 +149,11 @@ export default function Movements({ movements, setMovements, accessories, respon
                   <td style={{ fontWeight: 500 }}>{getAccessoryLabel(m.accessoryId)}</td>
                   <td>{getResponsibleName(m.responsibleId)}</td>
                   <td><code style={{ background: 'var(--bg-input)', padding: '2px 6px', borderRadius: '4px', fontSize: '0.8rem' }}>{m.soNumber || '-'}</code></td>
+                  <td>
+                    <div className="badge-author">
+                      <User size={12} /> {m.author || 'Sistema'}
+                    </div>
+                  </td>
                   <td style={{ textAlign: 'center' }}>
                     <button 
                       onClick={() => handleDelete(m.id)} 

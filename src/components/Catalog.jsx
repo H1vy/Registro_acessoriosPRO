@@ -1,9 +1,53 @@
-import React, { useState } from 'react'
-import { Plus, Trash2, User, Package } from 'lucide-react'
+import { Plus, Trash2, User, Package, Users, ShieldCheck, UserPlus, Lock } from 'lucide-react'
+import { getAllData, addRecord, deleteRecord } from '../utils/db'
 
-export default function Catalog({ accessories, setAccessories, responsibles, setResponsibles }) {
+export default function Catalog({ accessories, setAccessories, responsibles, setResponsibles, currentUser }) {
   const [newAcc, setNewAcc] = useState({ factoryCode: '', commercialName: '' })
   const [newResp, setNewResp] = useState({ name: '' })
+  
+  // Estados para Gestão de Usuários (Apenas Admin)
+  const [dbUsers, setDbUsers] = useState([])
+  const [newUser, setNewUser] = useState({ username: '', password: '', role: 'user' })
+  const [showUserManagement, setShowUserManagement] = useState(false)
+
+  React.useEffect(() => {
+    if (currentUser?.role === 'admin') {
+      loadUsers()
+    }
+  }, [currentUser])
+
+  const loadUsers = async () => {
+    const users = await getAllData('users')
+    setDbUsers(users)
+  }
+
+  const handleRegisterUser = async (e) => {
+    e.preventDefault()
+    if (!newUser.username || !newUser.password) return
+    
+    // Verificar se já existe
+    if (dbUsers.find(u => u.username === newUser.username)) {
+      alert('Usuário já existe!')
+      return
+    }
+
+    const userData = { ...newUser, id: Date.now().toString() }
+    await addRecord('users', userData)
+    setNewUser({ username: '', password: '', role: 'user' })
+    loadUsers()
+    alert('Usuário cadastrado com sucesso!')
+  }
+
+  const removeUser = async (id) => {
+    if (id === 'admin-id') {
+      alert('Não é possível remover o administrador principal.')
+      return
+    }
+    if (window.confirm('Excluir este usuário permanentemente?')) {
+      await deleteRecord('users', id)
+      loadUsers()
+    }
+  }
 
   const addAccessory = (e) => {
     e.preventDefault()
@@ -24,7 +68,7 @@ export default function Catalog({ accessories, setAccessories, responsibles, set
 
   return (
     <div className="tab-content">
-      <div className="grid">
+      <div className="grid" style={{ gridTemplateColumns: currentUser?.role === 'admin' ? '1fr 1fr 1fr' : '1fr 1fr' }}>
         <div className="card">
           <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem' }}>
             <Package className="accent" /> Novos Acessórios
@@ -129,6 +173,65 @@ export default function Catalog({ accessories, setAccessories, responsibles, set
             </table>
           </div>
         </div>
+
+        {currentUser?.role === 'admin' && (
+          <div className="card" style={{ border: '1px solid rgba(56, 189, 248, 0.3)' }}>
+            <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '2rem' }}>
+              <ShieldCheck className="accent" size={28} /> Gestão de Usuários
+            </h2>
+            <form onSubmit={handleRegisterUser}>
+              <div className="input-group">
+                <label>Novo Usuário</label>
+                <div style={{ position: 'relative' }}>
+                  <UserPlus size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', opacity: 0.5 }} />
+                  <input 
+                    type="text" 
+                    style={{ paddingLeft: '32px' }}
+                    value={newUser.username}
+                    onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
+                    placeholder="Nome de login"
+                  />
+                </div>
+              </div>
+              <div className="input-group">
+                <label>Senha Provisória</label>
+                <div style={{ position: 'relative' }}>
+                  <Lock size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', opacity: 0.5 }} />
+                  <input 
+                    type="password" 
+                    style={{ paddingLeft: '32px' }}
+                    value={newUser.password}
+                    onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                    placeholder="Senha inicial"
+                  />
+                </div>
+              </div>
+              <button type="submit" className="btn-primary" style={{ width: '100%', background: 'linear-gradient(135deg, var(--accent), #0ea5e9)' }}>
+                Criar Nova Conta
+              </button>
+            </form>
+
+            <div style={{ marginTop: '2rem' }}>
+              <h4 style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '1rem', textTransform: 'uppercase' }}>Usuários Ativos</h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {dbUsers.map(u => (
+                  <div key={u.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem', background: 'rgba(255,255,255,0.03)', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Users size={14} className="accent" />
+                      <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>{u.username}</span>
+                      {u.role === 'admin' && <span style={{ fontSize: '0.6rem', background: 'var(--accent)', color: '#020617', padding: '1px 4px', borderRadius: '4px', fontWeight: 700 }}>ADMIN</span>}
+                    </div>
+                    {u.role !== 'admin' && (
+                      <button onClick={() => removeUser(u.id)} style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', opacity: 0.6 }}>
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

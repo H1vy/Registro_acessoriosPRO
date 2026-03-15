@@ -1,9 +1,10 @@
 const DB_NAME = 'AccessoriesProDB';
-const DB_VERSION = 1;
+const DB_VERSION = 2; // Incrementado para adicionar a store de usuários
 const STORES = {
   accessories: 'accessories',
   responsibles: 'responsibles',
-  movements: 'movements'
+  movements: 'movements',
+  users: 'users' // Nova store para autenticação
 };
 
 export const initDB = () => {
@@ -15,10 +16,10 @@ export const initDB = () => {
 
     request.onupgradeneeded = (event) => {
       const db = event.target.result;
-      Object.values(STORES).forEach(storeName => {
+      Object.keys(STORES).forEach(storeKey => {
+        const storeName = STORES[storeKey];
         if (!db.objectStoreNames.contains(storeName)) {
-          db.createObjectStore(storeName, { keyPath: 'id' || 'timestamp' });
-          // Nota: movements usa timestamp ou id próprio. Para simplificar, usaremos id em todos.
+          db.createObjectStore(storeName, { keyPath: 'id' });
         }
       });
     };
@@ -35,6 +36,44 @@ export const getAllData = async (storeName) => {
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
   });
+};
+
+export const addRecord = async (storeName, record) => {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(storeName, 'readwrite');
+    const store = transaction.objectStore(storeName);
+    const request = store.add(record);
+
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+};
+
+export const deleteRecord = async (storeName, id) => {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(storeName, 'readwrite');
+    const store = transaction.objectStore(storeName);
+    const request = store.delete(id);
+
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
+};
+
+export const seedAdminUser = async () => {
+  const users = await getAllData('users');
+  if (users.length === 0) {
+    const adminUser = {
+      id: 'admin-id',
+      username: 'admin',
+      password: 'admin123', // Senha padrão solicitada
+      role: 'admin'
+    };
+    await addRecord('users', adminUser);
+    console.log('Usuário admin semeado com sucesso.');
+  }
 };
 
 export const saveData = async (storeName, data) => {
