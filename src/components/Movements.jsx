@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { ArrowUpRight, ArrowDownLeft, ClipboardCheck, Trash2 } from 'lucide-react'
+import { ArrowUpRight, ArrowDownLeft, ClipboardCheck, Trash2, User } from 'lucide-react'
 import CustomSelect from './CustomSelect'
 
 export default function Movements({ movements, setMovements, accessories, responsibles, currentUser }) {
