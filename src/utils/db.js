@@ -38,21 +38,34 @@ export const getAllData = async (storeName) => {
 };
 
 export const saveData = async (storeName, data) => {
-  const db = await initDB();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(storeName, 'readwrite');
-    const store = transaction.objectStore(storeName);
+  try {
+    const db = await initDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(storeName, 'readwrite');
+      const store = transaction.objectStore(storeName);
 
-    // Limpar e inserir tudo (simplificado para manter paridade com LocalStorage por enquanto)
-    const clearRequest = store.clear();
-    
-    clearRequest.onsuccess = () => {
-      data.forEach(item => {
-        store.add(item);
-      });
-    };
+      const clearRequest = store.clear();
+      
+      clearRequest.onsuccess = () => {
+        if (data && data.length > 0) {
+          data.forEach(item => {
+            store.add(item);
+          });
+        }
+      };
 
-    transaction.oncomplete = () => resolve();
-    transaction.onerror = () => reject(transaction.error);
-  });
+      transaction.oncomplete = () => {
+        console.log(`Dados salvos com sucesso em ${storeName}`);
+        resolve();
+      };
+      
+      transaction.onerror = (event) => {
+        console.error(`Erro na transação de salvamento (${storeName}):`, event.target.error);
+        reject(event.target.error);
+      };
+    });
+  } catch (error) {
+    console.error(`Falha ao iniciar transação para ${storeName}:`, error);
+    throw error;
+  }
 };
