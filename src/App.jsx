@@ -29,9 +29,6 @@ function App() {
           const lsMov = JSON.parse(localStorage.getItem('movements') || '[]')
           
           if (lsAcc.length > 0 || lsResp.length > 0 || lsMov.length > 0) {
-            await saveData('accessories', lsAcc)
-            await saveData('responsibles', lsResp)
-            await saveData('movements', lsMov)
             acc = lsAcc; resp = lsResp; mov = lsMov;
           }
         }
@@ -48,6 +45,19 @@ function App() {
 
     loadInitialData()
   }, [])
+
+  // Persistência Automática via useEffect
+  useEffect(() => {
+    if (!loading) saveData('accessories', accessories);
+  }, [accessories, loading]);
+
+  useEffect(() => {
+    if (!loading) saveData('responsibles', responsibles);
+  }, [responsibles, loading]);
+
+  useEffect(() => {
+    if (!loading) saveData('movements', movements);
+  }, [movements, loading]);
 
   const exportBackup = () => {
     const data = { accessories, responsibles, movements, exportDate: new Date().toISOString() }
@@ -73,9 +83,6 @@ function App() {
             setAccessories(data.accessories)
             setResponsibles(data.responsibles)
             setMovements(data.movements)
-            await saveData('accessories', data.accessories)
-            await saveData('responsibles', data.responsibles)
-            await saveData('movements', data.movements)
             alert("Backup restaurado com sucesso!")
           }
         } else {
@@ -104,26 +111,16 @@ function App() {
             movements={movements} 
             accessories={accessories} 
             responsibles={responsibles} 
-            setMovements={async (update) => {
-              const nextMovements = typeof update === 'function' ? update(movements) : update;
-              setMovements(nextMovements);
-              await saveData('movements', nextMovements);
-            }}
+            setMovements={setMovements}
           />
         )
       case 'catalog':
         return (
           <Catalog 
             accessories={accessories} 
-            setAccessories={async (newAcc) => {
-              setAccessories(newAcc)
-              await saveData('accessories', newAcc)
-            }}
+            setAccessories={setAccessories}
             responsibles={responsibles}
-            setResponsibles={async (newResp) => {
-              setResponsibles(newResp)
-              await saveData('responsibles', newResp)
-            }}
+            setResponsibles={setResponsibles}
           />
         )
       default:
