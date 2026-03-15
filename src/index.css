@@ -544,7 +544,7 @@ tr:hover td {
 
 .password-toggle {
   position: absolute;
-  right: 0.5rem;
+  right: 1.25rem;
   top: 50%;
   transform: translateY(-50%);
   background: none;
@@ -727,7 +727,7 @@ tr:hover td {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  opacity: 0.2;
+  opacity: 0.1;
   transition: all 0.5s ease;
 }
 
