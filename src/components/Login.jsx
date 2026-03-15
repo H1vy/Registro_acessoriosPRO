@@ -9,6 +9,14 @@ export default function Login({ onLogin }) {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
 
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const handleMouseMove = (e) => {
+    const { clientX, clientY } = e;
+    const x = (clientX / window.innerWidth - 0.5) * 20;
+    const y = (clientY / window.innerHeight - 0.5) * 20;
+    setMousePos({ x, y });
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -34,11 +42,23 @@ export default function Login({ onLogin }) {
   };
 
   return (
-    <div className={`login-overlay ${isAdminMode ? 'admin' : ''}`}>
+    <div 
+      className={`login-overlay ${isAdminMode ? 'admin' : ''}`}
+      onMouseMove={handleMouseMove}
+    >
       <div className="login-blobs">
-        <div className="blob blob-1"></div>
-        <div className="blob blob-2"></div>
-        <div className="blob blob-3"></div>
+        <div 
+          className="blob blob-1"
+          style={{ transform: `translate(${mousePos.x * 1.5}px, ${mousePos.y * 1.5}px)` }}
+        ></div>
+        <div 
+          className="blob blob-2"
+          style={{ transform: `translate(${mousePos.x * -1}px, ${mousePos.y * -1}px)` }}
+        ></div>
+        <div 
+          className="blob blob-3"
+          style={{ transform: `translate(${mousePos.x * 0.5}px, ${mousePos.y * 0.5}px)` }}
+        ></div>
       </div>
       <div className={`login-card glass ${isAdminMode ? 'admin-card' : ''}`}>
         <div className="login-header">
