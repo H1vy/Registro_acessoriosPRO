@@ -4,6 +4,7 @@ import { addRecord, getAllData } from '../utils/db';
 
 export default function Login({ onLogin }) {
   const [isRegistering, setIsRegistering] = useState(false);
+  const [isAdminMode, setIsAdminMode] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -20,25 +21,11 @@ export default function Login({ onLogin }) {
     try {
       const users = await getAllData('users');
       
-      if (isRegistering) {
-        if (users.find(u => u.username === username)) {
-          setError('Usuário já existe.');
-          return;
-        }
-        const newUser = {
-          id: Date.now().toString(),
-          username,
-          password // Nota: Em um app real, use hash para senhas!
-        };
-        await addRecord('users', newUser);
-        onLogin(newUser);
+      const user = users.find(u => u.username === username && u.password === password);
+      if (user) {
+        onLogin(user);
       } else {
-        const user = users.find(u => u.username === username && u.password === password);
-        if (user) {
-          onLogin(user);
-        } else {
-          setError('Usuário ou senha inválidos.');
-        }
+        setError('Usuário ou senha inválidos.');
       }
     } catch (err) {
       console.error(err);
@@ -47,19 +34,19 @@ export default function Login({ onLogin }) {
   };
 
   return (
-    <div className="login-overlay">
+    <div className={`login-overlay ${isAdminMode ? 'admin' : ''}`}>
       <div className="login-blobs">
         <div className="blob blob-1"></div>
         <div className="blob blob-2"></div>
         <div className="blob blob-3"></div>
       </div>
-      <div className="login-card glass">
+      <div className={`login-card glass ${isAdminMode ? 'admin-card' : ''}`}>
         <div className="login-header">
           <div className="login-logo">
             <User size={32} />
           </div>
-          <h2>Acessórios PRO</h2>
-          <p>Entre para continuar</p>
+          <h2>{isAdminMode ? 'Acesso Master' : 'Acessórios PRO'}</h2>
+          <p>{isAdminMode ? 'Interface Administrativa' : 'Entre para continuar'}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="login-form">
@@ -71,7 +58,7 @@ export default function Login({ onLogin }) {
                 type="text" 
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="Seu nome de usuário"
+                placeholder={isAdminMode ? "Admin ID" : "Seu nome de usuário"}
               />
             </div>
           </div>
@@ -84,7 +71,7 @@ export default function Login({ onLogin }) {
                 type="password" 
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Sua senha"
+                placeholder="••••••••"
               />
             </div>
           </div>
@@ -92,15 +79,20 @@ export default function Login({ onLogin }) {
           {error && <div className="login-error">{error}</div>}
 
           <button type="submit" className="btn-primary login-submit">
-            Acessar Sistema
+            {isAdminMode ? 'Autenticar Master' : 'Acessar Sistema'}
             <ArrowRight size={18} />
           </button>
         </form>
 
-        <div className="login-footer" style={{ marginTop: '3rem', opacity: 0.3 }}>
-          <div title="Acesso Restrito" style={{ cursor: 'help' }}>
-            <Lock size={14} />
-          </div>
+        <div className="login-footer">
+          <button 
+            type="button" 
+            className={`admin-toggle-btn ${isAdminMode ? 'active' : ''}`}
+            onClick={() => setIsAdminMode(!isAdminMode)}
+            title={isAdminMode ? "Voltar ao Login Comum" : "Modo Administrador"}
+          >
+            <Lock size={16} />
+          </button>
         </div>
       </div>
     </div>
