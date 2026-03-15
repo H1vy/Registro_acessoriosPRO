@@ -72,8 +72,31 @@ header {
   font-size: 1.75rem;
   font-weight: 800;
   letter-spacing: -0.025em;
-  color: var(--accent);
   margin-bottom: 0.25rem;
+  
+  /* Shimmer Effect Setup */
+  background: linear-gradient(
+    to right, 
+    #f8fafc 40%, 
+    #9dd9ff 50%, 
+    #f8fafc 60%
+  );
+  background-size: 200% auto;
+  color: transparent;
+  background-clip: text;
+  -webkit-background-clip: text;
+  animation: shimmer 2.5s linear infinite;
+}
+
+.logo h1 span {
+  /* Inherit the shimmer effect from the parent but keep its own color structure if needed */
+  /* For now, letting the entire H1 shimmer together looks more cohesive */
+}
+
+@keyframes shimmer {
+  to {
+    background-position: 200% center;
+  }
 }
 
 nav {

@@ -104,9 +104,12 @@ function App() {
             movements={movements} 
             accessories={accessories} 
             responsibles={responsibles} 
-            setMovements={async (newMovements) => {
-              setMovements(newMovements)
-              await saveData('movements', newMovements)
+            setMovements={async (update) => {
+              setMovements(prev => {
+                const next = typeof update === 'function' ? update(prev) : update;
+                saveData('movements', next);
+                return next;
+              });
             }}
           />
         )
