@@ -63,17 +63,36 @@ export const deleteRecord = async (storeName, id) => {
 };
 
 export const seedAdminUser = async () => {
-  const users = await getAllData('users');
-  if (users.length === 0) {
-    const adminUser = {
-      id: 'admin-id',
-      username: 'admin',
-      password: 'admin123', // Senha padrão solicitada
-      role: 'admin'
+  const db = await initDB();
+  const transaction = db.transaction('users', 'readwrite');
+  const store = transaction.objectStore('users');
+  
+  return new Promise((resolve, reject) => {
+    const request = store.get('admin-id');
+    
+    request.onsuccess = () => {
+      const adminUser = {
+        id: 'admin-id',
+        username: 'Admin',
+        password: 'Admin123',
+        role: 'admin'
+      };
+      
+      if (!request.result) {
+        store.add(adminUser);
+        console.log('Usuário admin semeado com sucesso.');
+      } else {
+        // Atualiza as credenciais se forem diferentes (redefinição solicitada)
+        if (request.result.username !== 'Admin' || request.result.password !== 'Admin123') {
+          store.put(adminUser);
+          console.log('Credenciais do admin atualizadas.');
+        }
+      }
+      resolve();
     };
-    await addRecord('users', adminUser);
-    console.log('Usuário admin semeado com sucesso.');
-  }
+    
+    request.onerror = () => reject(request.error);
+  });
 };
 
 export const saveData = async (storeName, data) => {
