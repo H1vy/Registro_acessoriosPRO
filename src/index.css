@@ -88,11 +88,6 @@ header {
   animation: shimmer 2.5s linear infinite;
 }
 
-.logo h1 span {
-  /* Inherit the shimmer effect from the parent but keep its own color structure if needed */
-  /* For now, letting the entire H1 shimmer together looks more cohesive */
-}
-
 @keyframes shimmer {
   to {
     background-position: 200% center;
@@ -125,10 +120,16 @@ nav {
   gap: 0.5rem;
 }
 
-.nav-btn.active {
-  background: var(--accent);
+.nav-btn.active.checkout {
+  background: var(--success);
   color: #020617;
-  box-shadow: 0 4px 12px rgba(56, 189, 248, 0.3);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.nav-btn.active.return {
+  background: var(--danger);
+  color: #f8fafc;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
 }
 
 .nav-btn:hover:not(.active) {
@@ -165,7 +166,7 @@ label {
   letter-spacing: 0.025em;
 }
 
-input, select {
+input {
   width: 100%;
   padding: 0.85rem 1.1rem;
   background: var(--bg-input);
@@ -174,11 +175,125 @@ input, select {
   color: var(--text-primary);
   outline: none;
   font-size: 0.95rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-input:focus, select:focus {
+input:hover {
+  border-color: rgba(56, 189, 248, 0.4);
+  background: rgba(51, 65, 85, 0.6);
+}
+
+input:focus, .custom-select-trigger:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 4px var(--accent-light);
+}
+
+/* Custom Select Styles */
+.custom-select-container {
+  position: relative;
+  width: 100%;
+}
+
+.custom-select-trigger {
+  width: 100%;
+  padding: 0.85rem 1.1rem;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text-primary);
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.95rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.custom-select-trigger:hover {
+  border-color: rgba(56, 189, 248, 0.4);
+  background: rgba(51, 65, 85, 0.6);
+}
+
+.custom-select-trigger.open {
+  border-color: var(--accent);
+  border-bottom-left-radius: 4px;
+  border-bottom-right-radius: 4px;
+  box-shadow: 0 0 0 4px var(--accent-light);
+}
+
+.custom-select-trigger.placeholder span {
+  color: var(--text-secondary);
+  opacity: 0.7;
+}
+
+.chevron {
+  color: var(--text-secondary);
+  transition: transform 0.3s ease;
+}
+
+.chevron.rotated {
+  transform: rotate(180deg);
+  color: var(--accent);
+}
+
+.custom-select-options {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: #1e293b; /* Solid base for glassmorphism */
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  z-index: 100;
+  max-height: 250px;
+  overflow-y: auto;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+  animation: selectFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes selectFadeIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.custom-select-option {
+  padding: 0.85rem 1.1rem;
+  cursor: pointer;
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+  transition: all 0.2s ease;
+}
+
+.custom-select-option:hover {
+  background: var(--accent-light);
+  color: var(--accent);
+  padding-left: 1.4rem;
+}
+
+.custom-select-option.selected {
+  background: var(--accent-light);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* Custom Scrollbar for Select */
+.custom-select-options::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-select-options::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-select-options::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 10px;
+}
+
+.custom-select-options::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
 }
 
 .btn-primary {
@@ -250,15 +365,15 @@ tr:hover td {
 }
 
 .badge-checkout {
-  background: rgba(239, 68, 68, 0.15);
-  color: #fca5a5;
-  border: 1px solid rgba(239, 68, 68, 0.2);
-}
-
-.badge-return {
   background: rgba(16, 185, 129, 0.15);
   color: #6ee7b7;
   border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.badge-return {
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.2);
 }
 
 .loading {

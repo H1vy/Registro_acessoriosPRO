@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { ArrowUpRight, ArrowDownLeft, ClipboardCheck, Trash2 } from 'lucide-react'
+import CustomSelect from './CustomSelect'
 
 export default function Movements({ movements, setMovements, accessories, responsibles }) {
   const [formData, setFormData] = useState({
@@ -60,7 +61,7 @@ export default function Movements({ movements, setMovements, accessories, respon
             <div style={{ display: 'flex', gap: '1rem' }}>
               <button 
                 type="button"
-                className={`nav-btn ${formData.type === 'checkout' ? 'active' : ''}`}
+                className={`nav-btn ${formData.type === 'checkout' ? 'active checkout' : ''}`}
                 style={{ flex: 1, display: 'flex', justifyContent: 'center', gap: '0.5rem' }}
                 onClick={() => setFormData({ ...formData, type: 'checkout' })}
               >
@@ -68,7 +69,7 @@ export default function Movements({ movements, setMovements, accessories, respon
               </button>
               <button 
                 type="button"
-                className={`nav-btn ${formData.type === 'return' ? 'active' : ''}`}
+                className={`nav-btn ${formData.type === 'return' ? 'active return' : ''}`}
                 style={{ flex: 1, display: 'flex', justifyContent: 'center', gap: '0.5rem' }}
                 onClick={() => setFormData({ ...formData, type: 'return' })}
               >
@@ -79,30 +80,28 @@ export default function Movements({ movements, setMovements, accessories, respon
 
           <div className="grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
             <div className="input-group">
-              <label>Acessório</label>
-              <select 
+              <CustomSelect 
+                label="Acessório"
                 value={formData.accessoryId}
                 onChange={(e) => setFormData({ ...formData, accessoryId: e.target.value })}
-                required
-              >
-                <option value="">Selecione...</option>
-                {accessories.map(acc => (
-                  <option key={acc.id} value={acc.id}>{acc.factoryCode} - {acc.commercialName}</option>
-                ))}
-              </select>
+                options={accessories.map(acc => ({
+                  value: acc.id,
+                  label: `${acc.factoryCode} - ${acc.commercialName}`
+                }))}
+                placeholder="Selecione..."
+              />
             </div>
             <div className="input-group">
-              <label>Responsável</label>
-              <select 
+              <CustomSelect 
+                label="Responsável"
                 value={formData.responsibleId}
                 onChange={(e) => setFormData({ ...formData, responsibleId: e.target.value })}
-                required
-              >
-                <option value="">Selecione...</option>
-                {responsibles.map(resp => (
-                  <option key={resp.id} value={resp.id}>{resp.name}</option>
-                ))}
-              </select>
+                options={responsibles.map(resp => ({
+                  value: resp.id,
+                  label: resp.name
+                }))}
+                placeholder="Selecione..."
+              />
             </div>
           </div>
 
