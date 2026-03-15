@@ -28,10 +28,13 @@ export default function Movements({ movements, setMovements, accessories, respon
     setFormData({ ...formData, accessoryId: '', soNumber: '' })
   }
 
-  const handleDelete = (id) => {
-    if (window.confirm('Tem certeza que deseja excluir este registro?')) {
-      const filteredMovements = movements.filter(m => m.id !== id)
-      setMovements(filteredMovements)
+  const handleAnnulle = (id) => {
+    const reason = window.prompt('Justifique o motivo da anulação deste registro:')
+    if (reason && reason.trim()) {
+      const updatedMovements = movements.map(m => 
+        m.id === id ? { ...m, annulled: true, reason: reason.trim() } : m
+      )
+      setMovements(updatedMovements)
     }
   }
 
@@ -139,14 +142,21 @@ export default function Movements({ movements, setMovements, accessories, respon
             </thead>
             <tbody>
               {movements.map(m => (
-                <tr key={m.id}>
+                <tr key={m.id} className={m.annulled ? 'row-annulled' : ''}>
                   <td style={{ fontSize: '0.85rem', fontWeight: 500 }}>{formatDate(m.timestamp)}</td>
                   <td>
-                    <span className={`badge badge-${m.type}`}>
+                    <span className={`badge badge-${m.type} ${m.annulled ? 'badge-annulled' : ''}`}>
                       {m.type === 'checkout' ? 'Saída' : 'Retorno'}
                     </span>
                   </td>
-                  <td style={{ fontWeight: 500 }}>{getAccessoryLabel(m.accessoryId)}</td>
+                  <td style={{ fontWeight: 500 }}>
+                    {getAccessoryLabel(m.accessoryId)}
+                    {m.annulled && (
+                      <div className="annulment-reason">
+                         <strong>Motivo:</strong> {m.reason}
+                      </div>
+                    )}
+                  </td>
                   <td>{getResponsibleName(m.responsibleId)}</td>
                   <td><code style={{ background: 'var(--bg-input)', padding: '2px 6px', borderRadius: '4px', fontSize: '0.8rem' }}>{m.soNumber || '-'}</code></td>
                   <td>
@@ -155,14 +165,18 @@ export default function Movements({ movements, setMovements, accessories, respon
                     </div>
                   </td>
                   <td style={{ textAlign: 'center' }}>
-                    <button 
-                      onClick={() => handleDelete(m.id)} 
-                      className="btn-icon-danger"
-                      title="Excluir Registro"
-                      style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', transition: 'transform 0.2s' }}
-                    >
-                      <Trash2 size={18} />
-                    </button>
+                    {!m.annulled ? (
+                      <button 
+                        onClick={() => handleAnnulle(m.id)} 
+                        className="btn-icon-danger"
+                        title="Anular Registro"
+                        style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', transition: 'transform 0.2s' }}
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    ) : (
+                      <span className="status-annulled-tag">ANULADO</span>
+                    )}
                   </td>
                 </tr>
               ))}
