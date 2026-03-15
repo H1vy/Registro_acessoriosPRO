@@ -10,11 +10,26 @@ export default function Login({ onLogin }) {
   const [error, setError] = useState('');
 
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const [tilt, setTilt] = useState({ x: 0, y: 0 });
+
   const handleMouseMove = (e) => {
     const { clientX, clientY } = e;
-    const x = (clientX / window.innerWidth - 0.5) * 20;
-    const y = (clientY / window.innerHeight - 0.5) * 20;
+    const centerX = window.innerWidth / 2;
+    const centerY = window.innerHeight / 2;
+    
+    // Blobs parallax
+    const x = (clientX / window.innerWidth - 0.5) * 30;
+    const y = (clientY / window.innerHeight - 0.5) * 30;
     setMousePos({ x, y });
+
+    // Card Tilt
+    const tiltX = (clientY - centerY) / 50;
+    const tiltY = (centerX - clientX) / 50;
+    setTilt({ x: tiltX, y: tiltY });
+  };
+
+  const handleMouseLeave = () => {
+    setTilt({ x: 0, y: 0 });
   };
 
   const handleSubmit = async (e) => {
@@ -45,22 +60,30 @@ export default function Login({ onLogin }) {
     <div 
       className={`login-overlay ${isAdminMode ? 'admin' : ''}`}
       onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
+      style={{ perspective: '1000px' }}
     >
       <div className="login-blobs">
         <div 
           className="blob blob-1"
-          style={{ transform: `translate(${mousePos.x * 1.5}px, ${mousePos.y * 1.5}px)` }}
+          style={{ transform: `translate(${mousePos.x * 2}px, ${mousePos.y * 2}px) scale(1.1)` }}
         ></div>
         <div 
           className="blob blob-2"
-          style={{ transform: `translate(${mousePos.x * -1}px, ${mousePos.y * -1}px)` }}
+          style={{ transform: `translate(${mousePos.x * -1.5}px, ${mousePos.y * -1.5}px)` }}
         ></div>
         <div 
           className="blob blob-3"
-          style={{ transform: `translate(${mousePos.x * 0.5}px, ${mousePos.y * 0.5}px)` }}
+          style={{ transform: `translate(${mousePos.x * 1}px, ${mousePos.y * 1}px)` }}
         ></div>
       </div>
-      <div className={`login-card glass ${isAdminMode ? 'admin-card' : ''}`}>
+      <div 
+        className={`login-card glass ${isAdminMode ? 'admin-card' : ''}`}
+        style={{ 
+          transform: `rotateX(${tilt.x}deg) rotateY(${tilt.y}deg)`,
+          transition: tilt.x === 0 ? 'all 0.5s ease' : 'none'
+        }}
+      >
         <div className="login-header">
           <div className="login-logo">
             <User size={32} />

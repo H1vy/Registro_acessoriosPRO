@@ -584,11 +584,30 @@ tr:hover td {
   padding: 1.1rem;
   border-radius: 16px;
   font-size: 1rem;
-  letter-spacing: 0.5px;
+  letter-spacing: 1px;
   text-transform: uppercase;
   background: linear-gradient(135deg, var(--accent) 0%, #0ea5e9 100%);
   box-shadow: 0 10px 25px -5px rgba(56, 189, 248, 0.4);
   transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  position: relative;
+  overflow: hidden;
+}
+
+.login-submit::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -60%;
+  width: 20%;
+  height: 200%;
+  background: rgba(255, 255, 255, 0.2);
+  transform: rotate(30deg);
+  transition: none;
+}
+
+.login-submit:hover::after {
+  left: 140%;
+  transition: all 0.8s ease-in-out;
 }
 
 .login-submit:hover {
