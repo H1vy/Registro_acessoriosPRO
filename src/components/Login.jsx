@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { User, Lock, ArrowRight, UserPlus } from 'lucide-react';
+import { User, Lock, ArrowRight, UserPlus, Eye, EyeOff } from 'lucide-react';
 import { addRecord, getAllData } from '../utils/db';
 
 export default function Login({ onLogin }) {
-  const [isRegistering, setIsRegistering] = useState(false);
   const [isAdminMode, setIsAdminMode] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
 
   const handleSubmit = async (e) => {
@@ -21,7 +21,7 @@ export default function Login({ onLogin }) {
     try {
       const users = await getAllData('users');
       
-      const user = users.find(u => u.username === username && u.password === password);
+      const user = users.find(u => u.username.trim() === username.trim() && u.password.trim() === password.trim());
       if (user) {
         onLogin(user);
       } else {
@@ -58,7 +58,7 @@ export default function Login({ onLogin }) {
                 type="text" 
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder={isAdminMode ? "Admin ID" : "Seu nome de usuário"}
+                placeholder={isAdminMode ? "Admin" : "Seu nome de usuário"}
               />
             </div>
           </div>
@@ -68,11 +68,19 @@ export default function Login({ onLogin }) {
             <div className="input-with-icon">
               <Lock size={18} />
               <input 
-                type="password" 
+                type={showPassword ? "text" : "password"} 
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
               />
+              <button 
+                type="button"
+                className="password-toggle"
+                onClick={() => setShowPassword(!showPassword)}
+                tabIndex="-1"
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
             </div>
           </div>
 

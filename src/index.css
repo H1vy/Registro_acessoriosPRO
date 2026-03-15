@@ -517,6 +517,8 @@ tr:hover td {
 
 .input-with-icon {
   position: relative;
+  display: flex;
+  align-items: center;
 }
 
 .input-with-icon svg {
@@ -526,17 +528,41 @@ tr:hover td {
   transform: translateY(-50%);
   color: #64748b;
   transition: color 0.3s;
+  pointer-events: none;
 }
 
 .input-with-icon input {
   width: 100%;
-  padding: 1rem 1rem 1rem 3rem;
+  padding: 1rem 3.5rem 1rem 3rem;
   background: rgba(15, 23, 42, 0.6);
   border: 1px solid rgba(148, 163, 184, 0.1);
   border-radius: 16px;
   color: #f8fafc;
   font-size: 0.95rem;
   transition: all 0.3s;
+}
+
+.password-toggle {
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  z-index: 2;
+}
+
+.password-toggle:hover {
+  color: var(--accent);
+  background: rgba(56, 189, 248, 0.1);
 }
 
 .input-with-icon input:focus {
