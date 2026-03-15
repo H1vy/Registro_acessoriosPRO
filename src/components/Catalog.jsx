@@ -1,3 +1,4 @@
+import React, { useState } from 'react'
 import { Plus, Trash2, User, Package, Users, ShieldCheck, UserPlus, Lock } from 'lucide-react'
 import { getAllData, addRecord, deleteRecord } from '../utils/db'
 
