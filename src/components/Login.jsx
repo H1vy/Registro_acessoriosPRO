@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { User, Lock, ArrowRight, UserPlus, Eye, EyeOff } from 'lucide-react';
 import { addRecord, getAllData } from '../utils/db';
 
@@ -11,6 +11,68 @@ export default function Login({ onLogin }) {
 
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [tilt, setTilt] = useState({ x: 0, y: 0 });
+
+  // --- Canvas Smoke Trail ---
+  const canvasRef = useRef(null);
+  const particlesRef = useRef([]);
+  const animFrameRef = useRef(null);
+
+  const spawnParticles = useCallback((x, y) => {
+    const count = 4;
+    for (let i = 0; i < count; i++) {
+      particlesRef.current.push({
+        x: x + (Math.random() - 0.5) * 20,
+        y: y + (Math.random() - 0.5) * 20,
+        radius: Math.random() * 18 + 10,
+        opacity: Math.random() * 0.35 + 0.15,
+        vx: (Math.random() - 0.5) * 1.2,
+        vy: -(Math.random() * 1.5 + 0.5),
+        life: 1,
+        decay: Math.random() * 0.018 + 0.01,
+        hue: isAdminMode ? 260 : 200,
+      });
+    }
+  }, [isAdminMode]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+
+    const resize = () => {
+      canvas.width = canvas.offsetWidth;
+      canvas.height = canvas.offsetHeight;
+    };
+    resize();
+    window.addEventListener('resize', resize);
+
+    const loop = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      particlesRef.current = particlesRef.current.filter(p => p.life > 0);
+      for (const p of particlesRef.current) {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.radius += 0.4;
+        p.life -= p.decay;
+        p.opacity = p.life * 0.35;
+
+        const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.radius);
+        grad.addColorStop(0, `hsla(${p.hue}, 80%, 70%, ${p.opacity})`);
+        grad.addColorStop(1, `hsla(${p.hue}, 80%, 70%, 0)`);
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        ctx.fillStyle = grad;
+        ctx.fill();
+      }
+      animFrameRef.current = requestAnimationFrame(loop);
+    };
+    loop();
+
+    return () => {
+      window.removeEventListener('resize', resize);
+      cancelAnimationFrame(animFrameRef.current);
+    };
+  }, []);
 
   const handleMouseMove = (e) => {
     const { clientX, clientY } = e;
@@ -26,6 +88,13 @@ export default function Login({ onLogin }) {
     const tiltX = (clientY - centerY) / 50;
     const tiltY = (centerX - clientX) / 50;
     setTilt({ x: tiltX, y: tiltY });
+
+    // Smoke particles (canvas-relative coordinates)
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const rect = canvas.getBoundingClientRect();
+      spawnParticles(clientX - rect.left, clientY - rect.top);
+    }
   };
 
   const handleMouseLeave = () => {
@@ -74,6 +143,17 @@ export default function Login({ onLogin }) {
           <div className="blob blob-3"></div>
         </div>
       </div>
+      <canvas
+        ref={canvasRef}
+        style={{
+          position: 'absolute',
+          inset: 0,
+          width: '100%',
+          height: '100%',
+          pointerEvents: 'none',
+          zIndex: 0,
+        }}
+      />
       <div 
         className={`login-card glass ${isAdminMode ? 'admin-card' : ''}`}
         style={{ 
