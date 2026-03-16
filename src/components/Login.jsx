@@ -17,14 +17,14 @@ export default function Login({ onLogin }) {
     const centerX = window.innerWidth / 2;
     const centerY = window.innerHeight / 2;
     
-    // Blobs parallax
-    const x = (clientX / window.innerWidth - 0.5) * 30;
-    const y = (clientY / window.innerHeight - 0.5) * 30;
-    setMousePos({ x, y });
+    // Repulsion vector: from mouse toward center (blobs flee the cursor)
+    const rx = (centerX - clientX) / window.innerWidth * 60;
+    const ry = (centerY - clientY) / window.innerHeight * 60;
+    setMousePos({ x: rx, y: ry });
 
-    // Card Tilt
-    const tiltX = (clientY - centerY) / 50;
-    const tiltY = (centerX - clientX) / 50;
+    // Card Tilt (kept for depth)
+    const tiltX = (clientY - centerY) / 55;
+    const tiltY = (centerX - clientX) / 55;
     setTilt({ x: tiltX, y: tiltY });
   };
 
@@ -64,16 +64,17 @@ export default function Login({ onLogin }) {
       style={{ perspective: '1000px' }}
     >
       <div className="login-blobs">
-        <div style={{ transform: `translate(${mousePos.x * 2.5}px, ${mousePos.y * 2.5}px)`, transition: 'transform 0.15s ease-out', position: 'absolute', inset: 0 }}>
+        {/* Each blob is pushed AWAY from the cursor with unique strength & lag */}
+        <div style={{ transform: `translate(${mousePos.x * 3}px, ${mousePos.y * 3}px)`, transition: 'transform 0.6s cubic-bezier(0.25,0.46,0.45,0.94)', position: 'absolute', inset: 0 }}>
           <div className="blob blob-1"></div>
         </div>
-        <div style={{ transform: `translate(${mousePos.x * -2}px, ${mousePos.y * -2}px)`, transition: 'transform 0.2s ease-out', position: 'absolute', inset: 0 }}>
+        <div style={{ transform: `translate(${mousePos.x * -2}px, ${mousePos.y * -2}px)`, transition: 'transform 0.9s cubic-bezier(0.25,0.46,0.45,0.94)', position: 'absolute', inset: 0 }}>
           <div className="blob blob-2"></div>
         </div>
-        <div style={{ transform: `translate(${mousePos.x * 1.2}px, ${mousePos.y * 1.2}px)`, transition: 'transform 0.25s ease-out', position: 'absolute', inset: 0 }}>
+        <div style={{ transform: `translate(${mousePos.x * 1.5}px, ${mousePos.y * 1.5}px)`, transition: 'transform 0.4s cubic-bezier(0.25,0.46,0.45,0.94)', position: 'absolute', inset: 0 }}>
           <div className="blob blob-3"></div>
         </div>
-        <div style={{ transform: `translate(${mousePos.x * -1.5}px, ${mousePos.y * -1.5}px)`, transition: 'transform 0.18s ease-out', position: 'absolute', inset: 0 }}>
+        <div style={{ transform: `translate(${mousePos.x * -3.5}px, ${mousePos.y * -3.5}px)`, transition: 'transform 1.1s cubic-bezier(0.25,0.46,0.45,0.94)', position: 'absolute', inset: 0 }}>
           <div className="blob blob-4"></div>
         </div>
       </div>
