@@ -73,6 +73,9 @@ export default function Login({ onLogin }) {
         <div style={{ transform: `translate(${mousePos.x * 1.2}px, ${mousePos.y * 1.2}px)`, transition: 'transform 0.25s ease-out', position: 'absolute', inset: 0 }}>
           <div className="blob blob-3"></div>
         </div>
+        <div style={{ transform: `translate(${mousePos.x * -1.5}px, ${mousePos.y * -1.5}px)`, transition: 'transform 0.18s ease-out', position: 'absolute', inset: 0 }}>
+          <div className="blob blob-4"></div>
+        </div>
       </div>
       <div 
         className={`login-card glass ${isAdminMode ? 'admin-card' : ''}`}
