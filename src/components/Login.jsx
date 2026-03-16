@@ -89,11 +89,33 @@ export default function Login({ onLogin }) {
     const tiltY = (centerX - clientX) / 50;
     setTilt({ x: tiltX, y: tiltY });
 
-    // Smoke particles (canvas-relative coordinates)
+    // Smoke particles — only spawn when cursor is over a blob
     const canvas = canvasRef.current;
     if (canvas) {
       const rect = canvas.getBoundingClientRect();
-      spawnParticles(clientX - rect.left, clientY - rect.top);
+      const cx = clientX - rect.left;
+      const cy = clientY - rect.top;
+      const W = rect.width;
+      const H = rect.height;
+
+      // Approximate blob centers (CSS positions + parallax offset)
+      const parallaxX = x * 2.5; // matches wrapper multiplier
+      const parallaxY = y * 2.5;
+      const blobs = [
+        { cx: W - 90  + parallaxX,      cy: 90         + parallaxY,      r: 210 }, // blob-1 top-right
+        { cx: 110     + (-x * 2),        cy: H - 110    + (-y * 2),       r: 190 }, // blob-2 bottom-left
+        { cx: W / 2   + x * 1.2,         cy: H / 2      + y * 1.2,        r: 160 }, // blob-3 center
+      ];
+
+      const insideBlob = blobs.some(b => {
+        const dx = cx - b.cx;
+        const dy = cy - b.cy;
+        return Math.sqrt(dx * dx + dy * dy) < b.r;
+      });
+
+      if (insideBlob) {
+        spawnParticles(cx, cy);
+      }
     }
   };
 
