@@ -64,18 +64,15 @@ export default function Login({ onLogin }) {
       style={{ perspective: '1000px' }}
     >
       <div className="login-blobs">
-        <div 
-          className="blob blob-1"
-          style={{ transform: `translate(${mousePos.x * 2}px, ${mousePos.y * 2}px) scale(1.1)` }}
-        ></div>
-        <div 
-          className="blob blob-2"
-          style={{ transform: `translate(${mousePos.x * -1.5}px, ${mousePos.y * -1.5}px)` }}
-        ></div>
-        <div 
-          className="blob blob-3"
-          style={{ transform: `translate(${mousePos.x * 1}px, ${mousePos.y * 1}px)` }}
-        ></div>
+        <div style={{ transform: `translate(${mousePos.x * 2.5}px, ${mousePos.y * 2.5}px)`, transition: 'transform 0.15s ease-out', position: 'absolute', inset: 0 }}>
+          <div className="blob blob-1"></div>
+        </div>
+        <div style={{ transform: `translate(${mousePos.x * -2}px, ${mousePos.y * -2}px)`, transition: 'transform 0.2s ease-out', position: 'absolute', inset: 0 }}>
+          <div className="blob blob-2"></div>
+        </div>
+        <div style={{ transform: `translate(${mousePos.x * 1.2}px, ${mousePos.y * 1.2}px)`, transition: 'transform 0.25s ease-out', position: 'absolute', inset: 0 }}>
+          <div className="blob blob-3"></div>
+        </div>
       </div>
       <div 
         className={`login-card glass ${isAdminMode ? 'admin-card' : ''}`}
