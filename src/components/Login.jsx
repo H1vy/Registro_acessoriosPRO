@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import { User, Lock, ArrowRight, UserPlus, Eye, EyeOff } from 'lucide-react';
 import { addRecord, getAllData } from '../utils/db';
 
@@ -11,101 +11,6 @@ export default function Login({ onLogin }) {
 
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [tilt, setTilt] = useState({ x: 0, y: 0 });
-
-  // --- Canvas Smoke Trail ---
-  const canvasRef = useRef(null);
-  const particlesRef = useRef([]);
-  const animFrameRef = useRef(null);
-  const timeRef = useRef(0);
-
-  // Each blob: {hue, sat, lit} matching CSS blob colors and their opacities
-  const BLOB_COLORS = [
-    { hue: 198, sat: 93, lit: 60, opacity: 0.4 }, // blob-1: accent cyan
-    { hue: 160, sat: 84, lit: 39, opacity: 0.4 }, // blob-2: success green
-    { hue: 262, sat: 83, lit: 58, opacity: 0.4 }, // blob-3: purple
-  ];
-
-  const spawnSmokeAt = useCallback((cx, cy, blobIdx) => {
-    const color = BLOB_COLORS[blobIdx];
-    const count = 3;
-    for (let i = 0; i < count; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const speed = Math.random() * 0.8 + 0.3;
-      particlesRef.current.push({
-        x: cx + (Math.random() - 0.5) * 30,
-        y: cy + (Math.random() - 0.5) * 30,
-        radius: Math.random() * 22 + 14,
-        vx: Math.cos(angle) * speed * 0.6,
-        vy: -(Math.random() * 1.0 + 0.4),   // mostly upward
-        angularV: (Math.random() - 0.5) * 0.04, // curl/twist
-        waveAmp: Math.random() * 0.6 + 0.2,     // sinusoidal side-drift
-        waveFreq: Math.random() * 0.04 + 0.02,
-        age: 0,
-        life: 1,
-        decay: Math.random() * 0.008 + 0.005, // slower for wispy persistence
-        hue: color.hue + (Math.random() - 0.5) * 15,
-        sat: color.sat,
-        lit: color.lit + Math.random() * 15,
-        maxOpacity: color.opacity * (Math.random() * 0.5 + 0.3),
-      });
-    }
-  }, []);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-
-    const resize = () => {
-      canvas.width = canvas.offsetWidth;
-      canvas.height = canvas.offsetHeight;
-    };
-    resize();
-    window.addEventListener('resize', resize);
-
-    const loop = () => {
-      timeRef.current++;
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      particlesRef.current = particlesRef.current.filter(p => p.life > 0);
-
-      for (const p of particlesRef.current) {
-        p.age++;
-        // Sinusoidal side-drift for wisps
-        p.x += p.vx + Math.sin(p.age * p.waveFreq) * p.waveAmp;
-        p.y += p.vy;
-        // Smoke expands and slows
-        p.radius += 0.55;
-        p.vy *= 0.99;
-        p.vx *= 0.98;
-        p.life -= p.decay;
-
-        // Opacity: ramp up briefly then fade out gracefully
-        const progress = 1 - p.life;
-        const opacity = progress < 0.15
-          ? p.maxOpacity * (progress / 0.15)
-          : p.maxOpacity * p.life;
-
-        // Multi-stop gradient for wispy tendrils
-        const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.radius);
-        grad.addColorStop(0,   `hsla(${p.hue}, ${p.sat}%, ${p.lit}%, ${opacity * 0.9})`);
-        grad.addColorStop(0.4, `hsla(${p.hue}, ${p.sat}%, ${p.lit}%, ${opacity * 0.5})`);
-        grad.addColorStop(0.8, `hsla(${p.hue}, ${p.sat}%, ${p.lit}%, ${opacity * 0.1})`);
-        grad.addColorStop(1,   `hsla(${p.hue}, ${p.sat}%, ${p.lit}%, 0)`);
-
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-        ctx.fillStyle = grad;
-        ctx.fill();
-      }
-      animFrameRef.current = requestAnimationFrame(loop);
-    };
-    loop();
-
-    return () => {
-      window.removeEventListener('resize', resize);
-      cancelAnimationFrame(animFrameRef.current);
-    };
-  }, []);
 
   const handleMouseMove = (e) => {
     const { clientX, clientY } = e;
@@ -121,35 +26,6 @@ export default function Login({ onLogin }) {
     const tiltX = (clientY - centerY) / 50;
     const tiltY = (centerX - clientX) / 50;
     setTilt({ x: tiltX, y: tiltY });
-
-    // Smoke spawns at blob OUTER EDGE only
-    const canvas = canvasRef.current;
-    if (canvas) {
-      const rect = canvas.getBoundingClientRect();
-      const cx = clientX - rect.left;
-      const cy = clientY - rect.top;
-      const W = rect.width;
-      const H = rect.height;
-
-      const blobDefs = [
-        { cx: W - 90  + x * 2.5,  cy: 90        + y * 2.5,  r: 210, idx: 0 },
-        { cx: 110     + (-x * 2), cy: H - 110   + (-y * 2), r: 190, idx: 1 },
-        { cx: W / 2   + x * 1.2,  cy: H / 2     + y * 1.2,  r: 160, idx: 2 },
-      ];
-
-      // "Outer ring" = distance is between 0.75*r and 1.2*r from blob center
-      for (const b of blobDefs) {
-        const dx = cx - b.cx;
-        const dy = cy - b.cy;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        const inner = b.r * 0.75;
-        const outer = b.r * 1.20;
-        if (dist >= inner && dist <= outer) {
-          spawnSmokeAt(cx, cy, b.idx);
-          break; // one blob at a time
-        }
-      }
-    }
   };
 
   const handleMouseLeave = () => {
@@ -198,17 +74,6 @@ export default function Login({ onLogin }) {
           <div className="blob blob-3"></div>
         </div>
       </div>
-      <canvas
-        ref={canvasRef}
-        style={{
-          position: 'absolute',
-          inset: 0,
-          width: '100%',
-          height: '100%',
-          pointerEvents: 'none',
-          zIndex: 0,
-        }}
-      />
       <div 
         className={`login-card glass ${isAdminMode ? 'admin-card' : ''}`}
         style={{ 
