@@ -436,7 +436,7 @@ tr:hover td {
   background: var(--accent);
   top: -120px;
   right: -120px;
-  animation: floatA 8s ease-in-out infinite alternate;
+  animation: floatA 18s ease-in-out infinite alternate;
 }
 
 .blob-2 {
@@ -445,7 +445,7 @@ tr:hover td {
   background: var(--success);
   bottom: -80px;
   left: -80px;
-  animation: floatB 10s ease-in-out infinite alternate;
+  animation: floatB 22s ease-in-out infinite alternate;
 }
 
 .blob-3 {
@@ -454,7 +454,7 @@ tr:hover td {
   background: #8b5cf6;
   top: 50%;
   left: 50%;
-  animation: floatC 7s ease-in-out infinite alternate;
+  animation: floatC 15s ease-in-out infinite alternate;
 }
 
 @keyframes floatA {
