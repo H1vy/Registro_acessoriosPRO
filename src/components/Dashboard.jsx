@@ -97,14 +97,19 @@ export default function Dashboard({ movements, accessories, responsibles }) {
   const respData = processResponsibleData()
 
   const exportToExcel = () => {
-    const data = filteredMovements.map(m => ({
-      Data: new Date(m.timestamp).toLocaleString('pt-BR'),
-      Tipo: m.type === 'checkout' ? 'Saída' : 'Retorno',
-      'Cód. Fábrica': accessories.find(a => a.id === m.accessoryId)?.factoryCode || '?',
-      'Nome Comercial': accessories.find(a => a.id === m.accessoryId)?.commercialName || '?',
-      Responsável: responsibles.find(r => r.id === m.responsibleId)?.name || '?',
-      'Ordem de Serviço': m.soNumber || '-'
-    }))
+    const data = filteredMovements.map(m => {
+      const accessory = accessories.find(a => a.id === m.accessoryId);
+      const responsible = responsibles.find(r => r.id === m.responsibleId);
+      
+      return {
+        Data: new Date(m.timestamp).toLocaleString('pt-BR'),
+        Tipo: m.type === 'checkout' ? 'Saída' : 'Retorno',
+        'Cód. Fábrica': accessory ? accessory.factoryCode : '(Registro Nulo/Deletado)',
+        'Nome Comercial': accessory ? accessory.commercialName : '(N/A)',
+        Responsável: responsible ? responsible.name : '(Registro Nulo/Deletado)',
+        'Ordem de Serviço': m.soNumber || '-'
+      };
+    });
 
     const ws = XLSX.utils.json_to_sheet(data)
     const wb = XLSX.utils.book_new()
