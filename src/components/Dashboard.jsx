@@ -107,7 +107,10 @@ export default function Dashboard({ movements, accessories, responsibles }) {
         'Cód. Fábrica': accessory ? accessory.factoryCode : '(Registro Nulo/Deletado)',
         'Nome Comercial': accessory ? accessory.commercialName : '(N/A)',
         Responsável: responsible ? responsible.name : '(Registro Nulo/Deletado)',
-        'Ordem de Serviço': m.soNumber || '-'
+        'Ordem de Serviço': m.soNumber || '-',
+        Autor: m.author || 'Sistema',
+        Status: m.annulled ? 'ANULADO' : 'Ativo',
+        'Justificativa (Se Anulado)': m.reason || '-'
       };
     });
 
