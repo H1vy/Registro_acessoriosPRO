@@ -45,8 +45,15 @@ export default function Login({ onLogin }) {
       const users = await getAllData('users');
       
       const user = users.find(u => u.username.trim() === username.trim() && u.password.trim() === password.trim());
+      
       if (user) {
-        onLogin(user);
+        if (isAdminMode && user.role !== 'admin') {
+          setError('Esta conta não possui privilégios de administrador.');
+        } else if (!isAdminMode && user.role === 'admin') {
+          setError('Utilize a aba "Acesso Master" para entrar como administrador.');
+        } else {
+          onLogin(user);
+        }
       } else {
         setError('Usuário ou senha inválidos.');
       }

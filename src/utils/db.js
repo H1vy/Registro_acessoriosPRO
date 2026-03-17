@@ -1,129 +1,79 @@
-const DB_NAME = 'AccessoriesProDB';
-const DB_VERSION = 2; // Incrementado para adicionar a store de usuários
-const STORES = {
-  accessories: 'accessories',
-  responsibles: 'responsibles',
-  movements: 'movements',
-  users: 'users' // Nova store para autenticação
-};
-
-export const initDB = () => {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-
-    request.onerror = () => reject(request.error);
-    request.onsuccess = () => resolve(request.result);
-
-    request.onupgradeneeded = (event) => {
-      const db = event.target.result;
-      Object.keys(STORES).forEach(storeKey => {
-        const storeName = STORES[storeKey];
-        if (!db.objectStoreNames.contains(storeName)) {
-          db.createObjectStore(storeName, { keyPath: 'id' });
-        }
-      });
-    };
-  });
-};
+import { ref, get, set, child, remove, push } from "firebase/database";
+import { dbFB } from "./firebase";
 
 export const getAllData = async (storeName) => {
-  const db = await initDB();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(storeName, 'readonly');
-    const store = transaction.objectStore(storeName);
-    const request = store.getAll();
-
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
+  try {
+    const dbRef = ref(dbFB);
+    const snapshot = await get(child(dbRef, storeName));
+    if (snapshot.exists()) {
+      // O Firebase retorna um objeto quando são adds sucessivos. Precisamos converte para Array.
+      const data = snapshot.val();
+      if (Array.isArray(data)) {
+        return data.filter(item => item !== null);
+      }
+      return Object.values(data);
+    } else {
+      return [];
+    }
+  } catch (error) {
+    console.error(`Erro ao buscar ${storeName}:`, error);
+    return [];
+  }
 };
 
 export const addRecord = async (storeName, record) => {
-  const db = await initDB();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(storeName, 'readwrite');
-    const store = transaction.objectStore(storeName);
-    const request = store.add(record);
-
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
+  try {
+    const defaultData = await getAllData(storeName);
+    const newData = [...defaultData, record];
+    await set(ref(dbFB, storeName), newData);
+    return newData;
+  } catch (error) {
+    console.error(`Erro ao adicionar em ${storeName}:`, error);
+    throw error;
+  }
 };
 
 export const deleteRecord = async (storeName, id) => {
-  const db = await initDB();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(storeName, 'readwrite');
-    const store = transaction.objectStore(storeName);
-    const request = store.delete(id);
+  try {
+    const defaultData = await getAllData(storeName);
+    const newData = defaultData.filter(item => item.id !== id);
+    await set(ref(dbFB, storeName), newData);
+    return newData;
+  } catch (error) {
+    console.error(`Erro ao apagar ${id} de ${storeName}:`, error);
+    throw error;
+  }
+};
 
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
-  });
+export const saveData = async (storeName, data) => {
+  try {
+    await set(ref(dbFB, storeName), data);
+    console.log(`Dados salvos inteiramente com sucesso em ${storeName} no Firebase.`);
+  } catch (error) {
+    console.error(`Erro ao salvar array em ${storeName}:`, error);
+    throw error;
+  }
 };
 
 export const seedAdminUser = async () => {
-  const db = await initDB();
-  const transaction = db.transaction('users', 'readwrite');
-  const store = transaction.objectStore('users');
-  
-  return new Promise((resolve, reject) => {
-    const request = store.get('admin-id');
+  try {
+    const users = await getAllData('users');
+    const adminExists = users.find(u => u.id === 'admin-id');
     
-    request.onsuccess = () => {
+    if (!adminExists) {
       const adminUser = {
         id: 'admin-id',
         username: 'Admin',
         password: 'Admin123',
         role: 'admin'
       };
-      
-      if (!request.result) {
-        store.add(adminUser);
-        console.log('Usuário admin semeado com sucesso.');
-      } else {
-        // Atualiza as credenciais se forem diferentes (redefinição solicitada)
-        if (request.result.username !== 'Admin' || request.result.password !== 'Admin123') {
-          store.put(adminUser);
-          console.log('Credenciais do admin atualizadas.');
-        }
-      }
-      resolve();
-    };
-    
-    request.onerror = () => reject(request.error);
-  });
-};
-
-export const saveData = async (storeName, data) => {
-  try {
-    const db = await initDB();
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction(storeName, 'readwrite');
-      const store = transaction.objectStore(storeName);
-
-      const clearRequest = store.clear();
-      
-      clearRequest.onsuccess = () => {
-        if (data && data.length > 0) {
-          data.forEach(item => {
-            store.add(item);
-          });
-        }
-      };
-
-      transaction.oncomplete = () => {
-        console.log(`Dados salvos com sucesso em ${storeName}`);
-        resolve();
-      };
-      
-      transaction.onerror = (event) => {
-        console.error(`Erro na transação de salvamento (${storeName}):`, event.target.error);
-        reject(event.target.error);
-      };
-    });
+      const newUsers = [...users, adminUser];
+      await set(ref(dbFB, 'users'), newUsers);
+      console.log('Firebase: Usuário admin semeado com sucesso.');
+    } else {
+      console.log('Firebase: Admin já existe na base.');
+    }
   } catch (error) {
-    console.error(`Falha ao iniciar transação para ${storeName}:`, error);
-    throw error;
+    console.error('Erro ao semear o Admin no Firebase:', error);
   }
 };

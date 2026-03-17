@@ -6,8 +6,9 @@ import Dashboard from './components/Dashboard'
 import Movements from './components/Movements'
 import Catalog from './components/Catalog'
 import Login from './components/Login'
+import AdminPanel from './components/AdminPanel'
 import { getAllData, saveData, seedAdminUser } from './utils/db'
-import { LogOut, User } from 'lucide-react'
+import { LogOut, User, Shield } from 'lucide-react'
 
 function App() {
   const [activeTab, setActiveTab] = useState('movements')
@@ -149,6 +150,8 @@ function App() {
             currentUser={currentUser}
           />
         )
+      case 'admin':
+        return <AdminPanel currentUser={currentUser} />
       default:
         return <Movements currentUser={currentUser} />
     }
@@ -188,6 +191,15 @@ function App() {
               <LayoutDashboard size={18} />
               Dashboard
             </button>
+            {currentUser?.role === 'admin' && (
+              <button 
+                className={`nav-btn ${activeTab === 'admin' ? 'active' : ''}`}
+                onClick={() => setActiveTab('admin')}
+              >
+                <Shield size={18} />
+                Administração
+              </button>
+            )}
           </div>
           
           <div className="header-actions">
