@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { LayoutDashboard, ClipboardList, Database, HardDriveDownload, HardDriveUpload } from 'lucide-react'
+import { LayoutDashboard, ClipboardList, Database, HardDriveDownload, HardDriveUpload, ClipboardCheck } from 'lucide-react'
 import './App.css'
 
 import Dashboard from './components/Dashboard'
 import Movements from './components/Movements'
 import Catalog from './components/Catalog'
+import PartSales from './components/PartSales'
 import Login from './components/Login'
 import AdminPanel from './components/AdminPanel'
 import { getAllData, saveData, seedAdminUser } from './utils/db'
@@ -150,8 +151,18 @@ function App() {
             currentUser={currentUser}
           />
         )
+      case 'part-sales':
+        return (
+          <PartSales 
+            movements={movements} 
+            accessories={accessories} 
+            responsibles={responsibles} 
+            setMovements={setMovements}
+            currentUser={currentUser}
+          />
+        )
       case 'admin':
-        return <AdminPanel currentUser={currentUser} />
+        return <AdminPanel currentUser={currentUser} setMovements={setMovements} />
       default:
         return <Movements currentUser={currentUser} />
     }
@@ -190,6 +201,13 @@ function App() {
             >
               <LayoutDashboard size={18} />
               Dashboard
+            </button>
+            <button 
+              className={`nav-btn ${activeTab === 'part-sales' ? 'active' : ''}`}
+              onClick={() => setActiveTab('part-sales')}
+            >
+              <ClipboardCheck size={18} />
+              Part Sales
             </button>
             {currentUser?.role === 'admin' && (
               <button 

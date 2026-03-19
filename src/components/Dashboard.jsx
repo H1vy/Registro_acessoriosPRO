@@ -102,15 +102,20 @@ export default function Dashboard({ movements, accessories, responsibles }) {
       const responsible = responsibles.find(r => r.id === m.responsibleId);
       
       return {
-        Data: new Date(m.timestamp).toLocaleString('pt-BR'),
-        Tipo: m.type === 'checkout' ? 'Saída' : 'Retorno',
+        'Data Saída': new Date(m.timestamp).toLocaleString('pt-BR'),
         'Cód. Fábrica': accessory ? accessory.factoryCode : '(Registro Nulo/Deletado)',
         'Nome Comercial': accessory ? accessory.commercialName : '(N/A)',
-        Responsável: responsible ? responsible.name : '(Registro Nulo/Deletado)',
+        'Responsável Saída': responsible ? responsible.name : '(Registro Nulo/Deletado)',
         'Ordem de Serviço': m.soNumber || '-',
-        Autor: m.author || 'Sistema',
-        Status: m.annulled ? 'ANULADO' : 'Ativo',
-        'Justificativa (Se Anulado)': m.reason || '-'
+        'Autor Saída': m.author || 'Sistema',
+        'Status Atual': m.annulled ? (m.isReturn ? 'RETORNADO' : 'ANULADO') : 'EM CAMPO',
+        'Justificativa Anulação': !m.isReturn ? (m.reason || '-') : 'N/A',
+        'Retornado': m.isReturn ? 'Sim' : 'Não',
+        'Quem Retornou': m.returnInfo?.returnedBy || '-',
+        'Data Retorno': m.isReturn ? new Date(m.returnInfo?.timestamp).toLocaleString('pt-BR') : '-',
+        'Check-in Realizado': m.checkin ? 'Sim' : 'Não',
+        'Data Check-in': m.checkin ? new Date(m.checkin.timestamp).toLocaleString('pt-BR') : '-',
+        'Autor Check-in': m.checkin?.author || '-'
       };
     });
 

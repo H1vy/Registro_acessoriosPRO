@@ -2,12 +2,26 @@ import React, { useState, useEffect } from 'react';
 import { Shield, Key, Eye, EyeOff, Save, Trash2, UserPlus } from 'lucide-react';
 import { getAllData, addRecord, saveData } from '../utils/db'; // Will be replaced by FB later
 
-export default function AdminPanel({ currentUser }) {
+export default function AdminPanel({ currentUser, setMovements }) {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [visiblePasswords, setVisiblePasswords] = useState({});
   const [newPassword, setNewPassword] = useState({});
   const [message, setMessage] = useState('');
+
+  const handleClearHistory = async () => {
+    if (window.confirm('ATENÇÃO: Isso irá apagar TODO o histórico de movimentações permanentemente. Deseja continuar?')) {
+      try {
+        await saveData('movements', []);
+        if (setMovements) setMovements([]);
+        setMessage('Histórico limpo com sucesso!');
+        setTimeout(() => setMessage(''), 3000);
+      } catch (err) {
+        console.error(err);
+        setMessage('Erro ao limpar histórico.');
+      }
+    }
+  };
 
   const loadUsers = async () => {
     try {
@@ -84,8 +98,16 @@ export default function AdminPanel({ currentUser }) {
 
   return (
     <div className="tab-content" style={{ maxWidth: '800px', margin: '0 auto' }}>
-      <div className="action-bar" style={{ marginBottom: '2rem' }}>
+      <div className="action-bar" style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h2><Shield size={24} style={{ marginRight: '8px', verticalAlign: 'middle', color: 'var(--accent)' }} /> Painel do Administrador</h2>
+        <button 
+          className="btn-icon-secondary btn-delete" 
+          onClick={handleClearHistory}
+          style={{ padding: '0.6rem 1rem', borderRadius: '10px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.9rem' }}
+        >
+          <Trash2 size={18} />
+          <span>Limpar Histórico</span>
+        </button>
       </div>
 
       {message && (

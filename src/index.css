@@ -56,11 +56,14 @@ body {
 }
 
 header {
-  margin-bottom: 3rem;
+  margin-bottom: 4.5rem;
+  padding: 1.5rem 0;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
   animation: slideDown 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  gap: 4rem;
 }
 
 @keyframes slideDown {
@@ -100,10 +103,12 @@ nav {
   background: var(--bg-card);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  padding: 0.4rem;
+  padding: 0.5rem;
   border-radius: 14px;
   border: 1px solid var(--border);
   box-shadow: var(--glass-shadow);
+  align-items: center;
+  flex-shrink: 0;
 }
 
 .nav-btn {
@@ -120,6 +125,8 @@ nav {
   gap: 0.5rem;
   transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   position: relative;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .nav-btn.active {
@@ -290,6 +297,43 @@ input:focus, .custom-select-trigger:focus {
   font-weight: 600;
 }
 
+/* Custom Select Search */
+.select-search-container {
+  padding: 10px;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  background: #1e293b;
+  z-index: 101;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.select-search-container input {
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid var(--border);
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  border-radius: 8px;
+  width: 100%;
+  color: var(--text-primary);
+}
+
+.select-search-container .search-icon {
+  color: var(--text-secondary);
+  opacity: 0.5;
+}
+
+.custom-select-option.empty {
+  padding: 2rem 1rem;
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  opacity: 0.5;
+  cursor: default;
+}
+
 /* Custom Scrollbar for Select */
 .custom-select-options::-webkit-scrollbar {
   width: 6px;
@@ -380,12 +424,6 @@ tr:hover td {
   background: rgba(16, 185, 129, 0.15);
   color: #6ee7b7;
   border: 1px solid rgba(16, 185, 129, 0.2);
-}
-
-.badge-return {
-  background: rgba(239, 68, 68, 0.15);
-  color: #fca5a5;
-  border: 1px solid rgba(239, 68, 68, 0.2);
 }
 
 .loading {
@@ -888,4 +926,30 @@ tr:hover td {
   border: 1px solid var(--danger);
   padding: 2px 6px;
   border-radius: 4px;
+}
+
+.badge-return {
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--success);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.return-details, .checkin-details {
+  background: rgba(255, 255, 255, 0.03);
+  padding: 0.5rem;
+  border-radius: 8px;
+  border-left: 3px solid var(--success);
+  line-height: 1.4;
+}
+
+.checkin-details {
+  border-left-color: var(--accent);
+}
+
+.annulment-reason {
+  background: rgba(239, 68, 68, 0.05);
+  padding: 0.5rem;
+  border-radius: 8px;
+  border-left: 3px solid var(--danger);
+  font-style: italic;
 }
