@@ -176,7 +176,7 @@ function App() {
     <div className="app-container">
       <header>
         <div className="logo">
-          <h1>ACESSÓRIOS <span>PRO</span></h1>
+          <h1><span className="logo-text">ACESSÓRIOS</span> <span className="logo-pro">PRO</span></h1>
           <span className="developer-tag">Hivyson Jesus Developer</span>
         </div>
         <nav>

@@ -7,6 +7,7 @@ export default function Dashboard({ movements, accessories, responsibles }) {
   const [quickFilter, setQuickFilter] = useState('all')
   const [customStartDate, setCustomStartDate] = useState('')
   const [customEndDate, setCustomEndDate] = useState('')
+  const [searchTerm, setSearchTerm] = useState('')
 
   const filterMovements = (movs) => {
     const now = new Date()
@@ -75,10 +76,18 @@ export default function Dashboard({ movements, accessories, responsibles }) {
       if (!acc) return
       const key = acc.factoryCode
       if (!data[key]) data[key] = { name: key, checkout: 0, return: 0, total: 0 }
-      data[key][m.type]++
+      
+      if (m.isReturn) {
+        data[key].return++
+      } else if (!m.annulled) {
+        data[key].checkout++
+      }
+      
       data[key].total++
     })
-    return Object.values(data).sort((a, b) => b.total - a.total)
+    return Object.values(data)
+      .filter(item => item.name.toLowerCase().includes(searchTerm.toLowerCase()))
+      .sort((a, b) => b.total - a.total)
   }
 
   const processResponsibleData = () => {
@@ -113,7 +122,7 @@ export default function Dashboard({ movements, accessories, responsibles }) {
     })
   }
 
-  const accData = processAccessoryData() // Still keeping if needed for other logic, but replacing the chart
+  const accData = processAccessoryData()
   const respData = processResponsibleData()
   const dailyTrendData = processDailyTrendData()
 
@@ -235,30 +244,79 @@ export default function Dashboard({ movements, accessories, responsibles }) {
       </div>
 
       <div className="grid">
-        <div className="card" style={{ height: '400px' }}>
-          <h3>Fluxo Diário: Saídas vs Retornos</h3>
-          <ResponsiveContainer width="100%" height="90%">
-            <BarChart data={dailyTrendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.1)" vertical={false} />
-              <XAxis dataKey="date" stroke="#64748b" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 500 }} dy={10} />
-              <YAxis stroke="#64748b" axisLine={false} tickLine={false} tick={{ fontSize: 12, fontWeight: 500 }} />
-              <Tooltip 
-                contentStyle={{ 
-                  background: 'rgba(30, 41, 59, 0.8)', 
-                  backdropFilter: 'blur(12px)',
-                  WebkitBackdropFilter: 'blur(12px)',
-                  border: '1px solid rgba(148, 163, 184, 0.2)',
-                  borderRadius: '12px',
-                  boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3)'
+        <div className="card" style={{ height: 'fit-content', gridColumn: 'span 2' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+            <h3 style={{ margin: 0 }}>Fluxo Diário e Movimentações por Código</h3>
+            
+            <div style={{ position: 'relative', flex: '0 1 250px' }}>
+              <input 
+                type="text" 
+                placeholder="Buscar por código..." 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                style={{ 
+                  padding: '0.6rem 1rem', 
+                  fontSize: '0.85rem', 
+                  background: 'var(--bg-input)', 
+                  border: '1px solid var(--border)',
+                  borderRadius: '10px',
+                  width: '100%'
                 }}
-                itemStyle={{ fontSize: '0.85rem', fontWeight: 600 }}
-                cursor={{ fill: 'rgba(148, 163, 184, 0.05)' }}
               />
-              <Legend verticalAlign="top" align="right" iconType="circle" height={36} wrapperStyle={{ fontSize: '0.85rem', fontWeight: 600, paddingBottom: '10px' }} />
-              <Bar dataKey="checkout" name="Saídas" fill="#38bdf8" radius={[4, 4, 0, 0]} barSize={20} />
-              <Bar dataKey="return" name="Retornos" fill="#ef4444" radius={[4, 4, 0, 0]} barSize={20} />
-            </BarChart>
-          </ResponsiveContainer>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
+            <div style={{ flex: '1 1 500px', height: '350px' }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={dailyTrendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.1)" vertical={false} />
+                  <XAxis dataKey="date" stroke="#64748b" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 500 }} dy={10} />
+                  <YAxis stroke="#64748b" axisLine={false} tickLine={false} tick={{ fontSize: 12, fontWeight: 500 }} />
+                  <Tooltip 
+                    contentStyle={{ 
+                      background: 'rgba(30, 41, 59, 0.8)', 
+                      backdropFilter: 'blur(12px)',
+                      WebkitBackdropFilter: 'blur(12px)',
+                      border: '1px solid rgba(148, 163, 184, 0.2)',
+                      borderRadius: '12px',
+                      boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3)'
+                    }}
+                    itemStyle={{ fontSize: '0.85rem', fontWeight: 600 }}
+                    cursor={{ fill: 'rgba(148, 163, 184, 0.05)' }}
+                  />
+                  <Legend verticalAlign="top" align="right" iconType="circle" height={36} wrapperStyle={{ fontSize: '0.85rem', fontWeight: 600, paddingBottom: '10px' }} />
+                  <Bar dataKey="checkout" name="Saídas" fill="#38bdf8" radius={[4, 4, 0, 0]} barSize={20} />
+                  <Bar dataKey="return" name="Retornos" fill="#ef4444" radius={[4, 4, 0, 0]} barSize={20} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div style={{ flex: '1 1 300px', maxHeight: '350px', overflowY: 'auto', paddingRight: '0.5rem' }} className="custom-scrollbar">
+              <table style={{ marginTop: 0, width: '100%', borderSpacing: '0 4px' }}>
+                <thead style={{ position: 'sticky', top: 0, background: 'var(--bg-card)', zIndex: 1, backdropFilter: 'blur(8px)' }}>
+                  <tr>
+                    <th style={{ padding: '0.5rem', fontSize: '0.7rem' }}>CÓDIGO</th>
+                    <th style={{ padding: '0.5rem', fontSize: '0.7rem', textAlign: 'center' }}>SAÍDAS</th>
+                    <th style={{ padding: '0.5rem', fontSize: '0.7rem', textAlign: 'center' }}>RETORNOS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {accData.map((item, idx) => (
+                    <tr key={idx}>
+                      <td style={{ padding: '0.6rem 0.5rem', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)' }}>{item.name}</td>
+                      <td style={{ padding: '0.6rem 0.5rem', fontSize: '0.85rem', textAlign: 'center', color: '#38bdf8', fontWeight: 700 }}>{item.checkout}</td>
+                      <td style={{ padding: '0.6rem 0.5rem', fontSize: '0.85rem', textAlign: 'center', color: '#ef4444', fontWeight: 700 }}>{item.return}</td>
+                    </tr>
+                  ))}
+                  {accData.length === 0 && (
+                    <tr>
+                      <td colSpan="3" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)', fontSize: '0.8rem' }}>Sem movimentações no período</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
 
         <div className="card" style={{ height: '400px' }}>

@@ -7,18 +7,7 @@ header {
   padding-bottom: 1rem;
 }
 
-.logo span {
-  color: var(--text-primary);
-  opacity: 0.5;
-  font-weight: 300;
-}
-
-.logo h1 {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: var(--accent);
-  margin: 0;
-}
+/* Estilos de logo movidos para index.css para suporte a animações complexas */
 
 .developer-tag {
   display: block;
@@ -36,7 +25,7 @@ main {
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 2rem;
 }
 

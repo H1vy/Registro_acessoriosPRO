@@ -9,7 +9,7 @@ export default function Movements({ movements, setMovements, accessories, respon
     type: 'checkout',
     soNumber: ''
   })
-  const [showOnlyToday, setShowOnlyToday] = useState(true)
+  const [filterDate, setFilterDate] = useState(new Date().toISOString().split('T')[0])
 
   const handleSubmit = (e) => {
     e.preventDefault()
@@ -65,6 +65,12 @@ export default function Movements({ movements, setMovements, accessories, respon
   const handleRemove = (id) => {
     if (currentUser?.role !== 'admin') return
     
+    const movement = movements.find(m => m.id === id)
+    if (!movement.annulled && !movement.checkin) {
+      alert('ERRO: Apenas registros ANULADOS ou FINALIZADOS (Check-in/Retorno) podem ser removidos.')
+      return
+    }
+
     const reason = window.prompt('JUSTIFIQUE O MOTIVO DA REMOÇÃO:\n(Este registro será ocultado, mas constará no relatório Excel)')
     if (reason && reason.trim()) {
       const updatedMovements = movements.map(m => 
@@ -147,15 +153,32 @@ export default function Movements({ movements, setMovements, accessories, respon
       </div>
 
       <div className="card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', gap: '1rem', flexWrap: 'wrap' }}>
           <h3 style={{ margin: 0, opacity: 0.8 }}>Histórico de Movimentações</h3>
-          <button 
-            className={`nav-btn ${showOnlyToday ? 'active' : ''}`}
-            onClick={() => setShowOnlyToday(!showOnlyToday)}
-            style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
-          >
-            {showOnlyToday ? 'Ver Histórico Completo' : 'Ver Apenas Hoje'}
-          </button>
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <label style={{ fontSize: '0.85rem', fontWeight: 500 }}>Filtrar por Data:</label>
+            <input 
+              type="date" 
+              value={filterDate}
+              onChange={(e) => setFilterDate(e.target.value)}
+              className="input-search"
+              style={{ width: 'auto', padding: '0.4rem' }}
+            />
+            <button 
+              className={`nav-btn ${!filterDate ? 'active' : ''}`} 
+              style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
+              onClick={() => {
+                if (filterDate) {
+                  setFilterDate('')
+                } else {
+                  setFilterDate(new Date().toISOString().split('T')[0])
+                }
+              }}
+            >
+              {!filterDate ? 'Ver Hoje' : 'Ver Tudo'}
+            </button>
+          </div>
         </div>
         <div style={{ overflowX: 'auto' }}>
           <table>
@@ -165,6 +188,7 @@ export default function Movements({ movements, setMovements, accessories, respon
                 <th>Acessório</th>
                 <th>Responsável</th>
                 <th>O.S.</th>
+                <th>Autor</th>
                 <th>Status / Retorno</th>
                 <th style={{ textAlign: 'center' }}>Ações</th>
               </tr>
@@ -172,11 +196,10 @@ export default function Movements({ movements, setMovements, accessories, respon
             <tbody>
               {movements
                 .filter(m => {
-                  if (m.isDeleted) return false // Ocultar removidos
-                  if (!showOnlyToday) return true
-                  const mDate = new Date(m.timestamp).toDateString()
-                  const today = new Date().toDateString()
-                  return mDate === today
+                  if (m.isDeleted) return false 
+                  if (!filterDate) return true
+                  const mDate = new Date(m.timestamp).toISOString().split('T')[0]
+                  return mDate === filterDate
                 })
                 .map(m => (
                 <tr key={m.id} className={`${m.annulled ? 'row-annulled' : ''} ${m.checkin ? 'row-checked-in' : ''}`}>
@@ -203,6 +226,11 @@ export default function Movements({ movements, setMovements, accessories, respon
                   </td>
                   <td>{getResponsibleName(m.responsibleId)}</td>
                   <td><code style={{ background: 'var(--bg-input)', padding: '2px 6px', borderRadius: '4px', fontSize: '0.8rem' }}>{m.soNumber || '-'}</code></td>
+                  <td>
+                    <div className="badge-author" style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <User size={12} /> {m.author || 'Sistema'}
+                    </div>
+                  </td>
                   <td>
                     {m.isReturn ? (
                       <span className="badge badge-return">RETORNO</span>
