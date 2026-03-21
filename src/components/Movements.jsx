@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { ArrowUpRight, ArrowDownLeft, ClipboardCheck, Trash2, User } from 'lucide-react'
+import { ArrowUpRight, ArrowDownLeft, ClipboardCheck, Trash2, User, XCircle } from 'lucide-react'
 import CustomSelect from './CustomSelect'
 
 export default function Movements({ movements, setMovements, accessories, responsibles, currentUser }) {
@@ -9,6 +9,7 @@ export default function Movements({ movements, setMovements, accessories, respon
     type: 'checkout',
     soNumber: ''
   })
+  const [showOnlyToday, setShowOnlyToday] = useState(true)
 
   const handleSubmit = (e) => {
     e.preventDefault()
@@ -58,6 +59,24 @@ export default function Movements({ movements, setMovements, accessories, respon
         )
         setMovements(updatedMovements)
       }
+    }
+  }
+
+  const handleRemove = (id) => {
+    if (currentUser?.role !== 'admin') return
+    
+    const reason = window.prompt('JUSTIFIQUE O MOTIVO DA REMOÇÃO:\n(Este registro será ocultado, mas constará no relatório Excel)')
+    if (reason && reason.trim()) {
+      const updatedMovements = movements.map(m => 
+        m.id === id ? { 
+          ...m, 
+          isDeleted: true, 
+          deletionReason: reason.trim(),
+          deletionTimestamp: new Date().toISOString(),
+          deletedBy: currentUser.username
+        } : m
+      )
+      setMovements(updatedMovements)
     }
   }
 
@@ -128,7 +147,16 @@ export default function Movements({ movements, setMovements, accessories, respon
       </div>
 
       <div className="card">
-        <h3 style={{ marginBottom: '1.5rem', opacity: 0.8 }}>Histórico de Movimentações</h3>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+          <h3 style={{ margin: 0, opacity: 0.8 }}>Histórico de Movimentações</h3>
+          <button 
+            className={`nav-btn ${showOnlyToday ? 'active' : ''}`}
+            onClick={() => setShowOnlyToday(!showOnlyToday)}
+            style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
+          >
+            {showOnlyToday ? 'Ver Histórico Completo' : 'Ver Apenas Hoje'}
+          </button>
+        </div>
         <div style={{ overflowX: 'auto' }}>
           <table>
             <thead>
@@ -142,8 +170,16 @@ export default function Movements({ movements, setMovements, accessories, respon
               </tr>
             </thead>
             <tbody>
-              {movements.map(m => (
-                <tr key={m.id} className={m.annulled ? 'row-annulled' : ''}>
+              {movements
+                .filter(m => {
+                  if (m.isDeleted) return false // Ocultar removidos
+                  if (!showOnlyToday) return true
+                  const mDate = new Date(m.timestamp).toDateString()
+                  const today = new Date().toDateString()
+                  return mDate === today
+                })
+                .map(m => (
+                <tr key={m.id} className={`${m.annulled ? 'row-annulled' : ''} ${m.checkin ? 'row-checked-in' : ''}`}>
                   <td style={{ fontSize: '0.85rem', fontWeight: 500 }}>{formatDate(m.timestamp)}</td>
                   <td style={{ fontWeight: 500 }}>
                     {getAccessoryLabel(m.accessoryId)}
@@ -168,29 +204,38 @@ export default function Movements({ movements, setMovements, accessories, respon
                   <td>{getResponsibleName(m.responsibleId)}</td>
                   <td><code style={{ background: 'var(--bg-input)', padding: '2px 6px', borderRadius: '4px', fontSize: '0.8rem' }}>{m.soNumber || '-'}</code></td>
                   <td>
-                    {m.annulled ? (
-                      m.isReturn ? (
-                        <span className="badge badge-return">RETORNADO</span>
-                      ) : (
-                        <span className="badge badge-annulled">ANULADO</span>
-                      )
+                    {m.isReturn ? (
+                      <span className="badge badge-return">RETORNO</span>
                     ) : (
-                      <span className="badge badge-checkout">EM CAMPO (SAÍDA)</span>
+                      <span className="badge badge-checkout">SAÍDA</span>
                     )}
                   </td>
                   <td style={{ textAlign: 'center' }}>
-                    {!m.annulled ? (
-                      <button 
-                        onClick={() => handleAnnulle(m.id)} 
-                        className="btn-icon-danger"
-                        title="Anular ou Registrar Retorno"
-                        style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', transition: 'transform 0.2s' }}
-                      >
-                        <Trash2 size={18} />
-                      </button>
-                    ) : (
-                      <span className="status-annulled-tag">{m.isReturn ? 'FINALIZADO' : 'ANULADO'}</span>
-                    )}
+                    <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', alignItems: 'center' }}>
+                      {!m.annulled ? (
+                        <button 
+                          onClick={() => handleAnnulle(m.id)} 
+                          className="btn-icon-danger"
+                          title="Anular ou Registrar Retorno"
+                          style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', transition: 'transform 0.2s' }}
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      ) : (
+                        <span className="status-annulled-tag">{m.isReturn ? 'FINALIZADO' : 'ANULADO'}</span>
+                      )}
+
+                      {currentUser?.role === 'admin' && (
+                        <button 
+                          onClick={() => handleRemove(m.id)} 
+                          className="btn-icon-danger"
+                          title="Remover Registro do Histórico"
+                          style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', transition: 'transform 0.2s' }}
+                        >
+                          <XCircle size={18} />
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}

@@ -93,11 +93,33 @@ export default function Dashboard({ movements, accessories, responsibles }) {
     return Object.values(data).sort((a, b) => b.count - a.count)
   }
 
-  const accData = processAccessoryData()
+  const processDailyTrendData = () => {
+    const data = {}
+    filteredMovements.forEach(m => {
+      const date = new Date(m.timestamp).toLocaleDateString('pt-BR')
+      if (!data[date]) data[date] = { date, checkout: 0, return: 0 }
+      
+      if (m.isReturn) {
+        data[date].return++
+      } else if (!m.annulled) {
+        data[date].checkout++
+      }
+    })
+    // Sort by date (assuming DD/MM/YYYY format, might need conversion for proper sort if many dates)
+    return Object.values(data).sort((a, b) => {
+      const dateA = new Date(a.date.split('/').reverse().join('-'))
+      const dateB = new Date(b.date.split('/').reverse().join('-'))
+      return dateA - dateB
+    })
+  }
+
+  const accData = processAccessoryData() // Still keeping if needed for other logic, but replacing the chart
   const respData = processResponsibleData()
+  const dailyTrendData = processDailyTrendData()
 
   const exportToExcel = () => {
-    const data = filteredMovements.map(m => {
+    // Para o Excel, exportamos TUDO, inclusive os deletados
+    const data = movements.map(m => {
       const accessory = accessories.find(a => a.id === m.accessoryId);
       const responsible = responsibles.find(r => r.id === m.responsibleId);
       
@@ -108,14 +130,17 @@ export default function Dashboard({ movements, accessories, responsibles }) {
         'Responsável Saída': responsible ? responsible.name : '(Registro Nulo/Deletado)',
         'Ordem de Serviço': m.soNumber || '-',
         'Autor Saída': m.author || 'Sistema',
-        'Status Atual': m.annulled ? (m.isReturn ? 'RETORNADO' : 'ANULADO') : 'EM CAMPO',
+        'Status Atual': m.isReturn ? 'RETORNO' : 'SAÍDA',
         'Justificativa Anulação': !m.isReturn ? (m.reason || '-') : 'N/A',
         'Retornado': m.isReturn ? 'Sim' : 'Não',
         'Quem Retornou': m.returnInfo?.returnedBy || '-',
         'Data Retorno': m.isReturn ? new Date(m.returnInfo?.timestamp).toLocaleString('pt-BR') : '-',
         'Check-in Realizado': m.checkin ? 'Sim' : 'Não',
         'Data Check-in': m.checkin ? new Date(m.checkin.timestamp).toLocaleString('pt-BR') : '-',
-        'Autor Check-in': m.checkin?.author || '-'
+        'Autor Check-in': m.checkin?.author || '-',
+        'REMOVIDO DO HISTÓRICO': m.isDeleted ? 'SIM' : 'NÃO',
+        'MOTIVO DA REMOÇÃO': m.deletionReason || '-',
+        'DATA DA REMOÇÃO': m.deletionTimestamp ? new Date(m.deletionTimestamp).toLocaleString('pt-BR') : '-'
       };
     });
 
@@ -211,11 +236,11 @@ export default function Dashboard({ movements, accessories, responsibles }) {
 
       <div className="grid">
         <div className="card" style={{ height: '400px' }}>
-          <h3>Acessórios por Código de Fábrica</h3>
+          <h3>Fluxo Diário: Saídas vs Retornos</h3>
           <ResponsiveContainer width="100%" height="90%">
-            <BarChart data={accData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+            <BarChart data={dailyTrendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.1)" vertical={false} />
-              <XAxis dataKey="name" stroke="#64748b" axisLine={false} tickLine={false} tick={{ fontSize: 12, fontWeight: 500 }} dy={10} />
+              <XAxis dataKey="date" stroke="#64748b" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 500 }} dy={10} />
               <YAxis stroke="#64748b" axisLine={false} tickLine={false} tick={{ fontSize: 12, fontWeight: 500 }} />
               <Tooltip 
                 contentStyle={{ 
@@ -230,7 +255,7 @@ export default function Dashboard({ movements, accessories, responsibles }) {
                 cursor={{ fill: 'rgba(148, 163, 184, 0.05)' }}
               />
               <Legend verticalAlign="top" align="right" iconType="circle" height={36} wrapperStyle={{ fontSize: '0.85rem', fontWeight: 600, paddingBottom: '10px' }} />
-              <Bar dataKey="checkout" name="Saídas" fill="#10b981" radius={[4, 4, 0, 0]} barSize={20} />
+              <Bar dataKey="checkout" name="Saídas" fill="#38bdf8" radius={[4, 4, 0, 0]} barSize={20} />
               <Bar dataKey="return" name="Retornos" fill="#ef4444" radius={[4, 4, 0, 0]} barSize={20} />
             </BarChart>
           </ResponsiveContainer>

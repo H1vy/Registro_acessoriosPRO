@@ -1,10 +1,21 @@
 import React, { useState } from 'react'
-import { Plus, Trash2, User, Package, Users, ShieldCheck, UserPlus, Lock } from 'lucide-react'
+import { Plus, Trash2, User, Package, Users, ShieldCheck, UserPlus, Lock, Edit2, Check, X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { getAllData, addRecord, deleteRecord } from '../utils/db'
 
 export default function Catalog({ accessories, setAccessories, responsibles, setResponsibles, currentUser }) {
   const [newAcc, setNewAcc] = useState({ factoryCode: '', commercialName: '' })
   const [newResp, setNewResp] = useState({ name: '' })
+  
+  // Paginação
+  const [currentPageAcc, setCurrentPageAcc] = useState(1)
+  const [currentPageResp, setCurrentPageResp] = useState(1)
+  const itemsPerPage = 5
+
+  // Edição
+  const [editingAcc, setEditingAcc] = useState(null) // ID do acessório em edição
+  const [editAccData, setEditAccData] = useState({ factoryCode: '', commercialName: '' })
+  const [editingResp, setEditingResp] = useState(null) // ID do responsável em edição
+  const [editRespData, setEditRespData] = useState({ name: '' })
   
   // Estados para Gestão de Usuários (Apenas Admin)
   const [dbUsers, setDbUsers] = useState([])
@@ -67,6 +78,37 @@ export default function Catalog({ accessories, setAccessories, responsibles, set
   const removeAccessory = (id) => setAccessories(accessories.filter(a => a.id !== id))
   const removeResponsible = (id) => setResponsibles(responsibles.filter(r => r.id !== id))
 
+  const handleEditAcc = (acc) => {
+    setEditingAcc(acc.id)
+    setEditAccData({ factoryCode: acc.factoryCode, commercialName: acc.commercialName })
+  }
+
+  const saveEditAcc = () => {
+    setAccessories(accessories.map(a => a.id === editingAcc ? { ...a, ...editAccData } : a))
+    setEditingAcc(null)
+  }
+
+  const handleEditResp = (resp) => {
+    setEditingResp(resp.id)
+    setEditRespData({ name: resp.name })
+  }
+
+  const saveEditResp = () => {
+    setResponsibles(responsibles.map(r => r.id === editingResp ? { ...r, ...editRespData } : r))
+    setEditingResp(null)
+  }
+
+  // Ordenação Alfabética
+  const sortedAccessories = [...accessories].sort((a, b) => a.factoryCode.localeCompare(b.factoryCode))
+  const sortedResponsibles = [...responsibles].sort((a, b) => a.name.localeCompare(b.name))
+
+  // Paginação
+  const totalPagesAcc = Math.ceil(sortedAccessories.length / itemsPerPage)
+  const paginatedAcc = sortedAccessories.slice((currentPageAcc - 1) * itemsPerPage, currentPageAcc * itemsPerPage)
+
+  const totalPagesResp = Math.ceil(sortedResponsibles.length / itemsPerPage)
+  const paginatedResp = sortedResponsibles.slice((currentPageResp - 1) * itemsPerPage, currentPageResp * itemsPerPage)
+
   return (
     <div className="tab-content">
       <div className="grid" style={{ gridTemplateColumns: currentUser?.role === 'admin' ? '1fr 1fr 1fr' : '1fr 1fr' }}>
@@ -108,24 +150,74 @@ export default function Catalog({ accessories, setAccessories, responsibles, set
                 </tr>
               </thead>
               <tbody>
-                {accessories.map(acc => (
+                {paginatedAcc.map(acc => (
                   <tr key={acc.id}>
-                    <td style={{ fontWeight: 600, color: 'var(--accent)' }}>{acc.factoryCode}</td>
-                    <td style={{ fontWeight: 500 }}>{acc.commercialName}</td>
+                    <td style={{ fontWeight: 600, color: 'var(--accent)' }}>
+                      {editingAcc === acc.id ? (
+                        <input 
+                          type="text" 
+                          value={editAccData.factoryCode} 
+                          onChange={(e) => setEditAccData({ ...editAccData, factoryCode: e.target.value })}
+                          style={{ padding: '4px 8px', fontSize: '0.85rem' }}
+                        />
+                      ) : acc.factoryCode}
+                    </td>
+                    <td style={{ fontWeight: 500 }}>
+                      {editingAcc === acc.id ? (
+                        <input 
+                          type="text" 
+                          value={editAccData.commercialName} 
+                          onChange={(e) => setEditAccData({ ...editAccData, commercialName: e.target.value })}
+                          style={{ padding: '4px 8px', fontSize: '0.85rem' }}
+                        />
+                      ) : acc.commercialName}
+                    </td>
                     <td style={{ textAlign: 'center' }}>
-                      <button 
-                        onClick={() => removeAccessory(acc.id)} 
-                        className="btn-icon-danger"
-                        style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer' }}
-                      >
-                        <Trash2 size={18} />
-                      </button>
+                      <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+                        {editingAcc === acc.id ? (
+                          <>
+                            <button onClick={saveEditAcc} className="btn-icon-edit" style={{ color: 'var(--success)' }}><Check size={16} /></button>
+                            <button onClick={() => setEditingAcc(null)} className="btn-icon-edit" style={{ color: 'var(--danger)' }}><X size={16} /></button>
+                          </>
+                        ) : (
+                          <>
+                            <button onClick={() => handleEditAcc(acc)} className="btn-icon-edit" title="Editar"><Edit2 size={16} /></button>
+                            <button 
+                              onClick={() => removeAccessory(acc.id)} 
+                              className="btn-icon-danger"
+                              style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer' }}
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+
+          {totalPagesAcc > 1 && (
+            <div className="pagination-container">
+              <button 
+                className="pagination-btn" 
+                disabled={currentPageAcc === 1} 
+                onClick={() => setCurrentPageAcc(currentPageAcc - 1)}
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <span className="pagination-info">{currentPageAcc} / {totalPagesAcc}</span>
+              <button 
+                className="pagination-btn" 
+                disabled={currentPageAcc === totalPagesAcc} 
+                onClick={() => setCurrentPageAcc(currentPageAcc + 1)}
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="card">
@@ -156,23 +248,64 @@ export default function Catalog({ accessories, setAccessories, responsibles, set
                 </tr>
               </thead>
               <tbody>
-                {responsibles.map(resp => (
+                {paginatedResp.map(resp => (
                   <tr key={resp.id}>
-                    <td style={{ fontWeight: 500 }}>{resp.name}</td>
+                    <td style={{ fontWeight: 500 }}>
+                      {editingResp === resp.id ? (
+                        <input 
+                          type="text" 
+                          value={editRespData.name} 
+                          onChange={(e) => setEditRespData({ name: e.target.value })}
+                          style={{ padding: '4px 8px', fontSize: '0.85rem' }}
+                        />
+                      ) : resp.name}
+                    </td>
                     <td style={{ textAlign: 'center' }}>
-                      <button 
-                        onClick={() => removeResponsible(resp.id)} 
-                        className="btn-icon-danger"
-                        style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer' }}
-                      >
-                        <Trash2 size={18} />
-                      </button>
+                      <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+                        {editingResp === resp.id ? (
+                          <>
+                            <button onClick={saveEditResp} className="btn-icon-edit" style={{ color: 'var(--success)' }}><Check size={16} /></button>
+                            <button onClick={() => setEditingResp(null)} className="btn-icon-edit" style={{ color: 'var(--danger)' }}><X size={16} /></button>
+                          </>
+                        ) : (
+                          <>
+                            <button onClick={() => handleEditResp(resp)} className="btn-icon-edit" title="Editar"><Edit2 size={16} /></button>
+                            <button 
+                              onClick={() => removeResponsible(resp.id)} 
+                              className="btn-icon-danger"
+                              style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer' }}
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+
+          {totalPagesResp > 1 && (
+            <div className="pagination-container">
+              <button 
+                className="pagination-btn" 
+                disabled={currentPageResp === 1} 
+                onClick={() => setCurrentPageResp(currentPageResp - 1)}
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <span className="pagination-info">{currentPageResp} / {totalPagesResp}</span>
+              <button 
+                className="pagination-btn" 
+                disabled={currentPageResp === totalPagesResp} 
+                onClick={() => setCurrentPageResp(currentPageResp + 1)}
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          )}
         </div>
 
         {currentUser?.role === 'admin' && (
@@ -207,7 +340,7 @@ export default function Catalog({ accessories, setAccessories, responsibles, set
                   />
                 </div>
               </div>
-              <button type="submit" className="btn-primary" style={{ width: '100%', background: 'linear-gradient(135deg, var(--accent), #0ea5e9)' }}>
+              <button type="submit" className="btn-primary" style={{ width: '100%' }}>
                 Criar Nova Conta
               </button>
             </form>
