@@ -109,7 +109,7 @@ export default function Movements({ movements, setMovements, accessories, respon
           <ClipboardCheck className="accent" /> Registrar Saída de Acessório
         </h2>
         <form onSubmit={handleSubmit}>
-          <div className="grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
+          <div className="grid-2">
             <div className="input-group">
               <CustomSelect 
                 label="Acessório"
@@ -180,7 +180,7 @@ export default function Movements({ movements, setMovements, accessories, respon
             </button>
           </div>
         </div>
-        <div style={{ overflowX: 'auto' }}>
+        <div className="table-container">
           <table>
             <thead>
               <tr>

@@ -244,7 +244,7 @@ export default function Dashboard({ movements, accessories, responsibles }) {
       </div>
 
       <div className="grid">
-        <div className="card" style={{ height: 'fit-content', gridColumn: 'span 2' }}>
+        <div className="card" style={{ height: 'fit-content' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
             <h3 style={{ margin: 0 }}>Fluxo Diário e Movimentações por Código</h3>
             
@@ -292,29 +292,31 @@ export default function Dashboard({ movements, accessories, responsibles }) {
             </div>
 
             <div style={{ flex: '1 1 300px', maxHeight: '350px', overflowY: 'auto', paddingRight: '0.5rem' }} className="custom-scrollbar">
-              <table style={{ marginTop: 0, width: '100%', borderSpacing: '0 4px' }}>
-                <thead style={{ position: 'sticky', top: 0, background: 'var(--bg-card)', zIndex: 1, backdropFilter: 'blur(8px)' }}>
-                  <tr>
-                    <th style={{ padding: '0.5rem', fontSize: '0.7rem' }}>CÓDIGO</th>
-                    <th style={{ padding: '0.5rem', fontSize: '0.7rem', textAlign: 'center' }}>SAÍDAS</th>
-                    <th style={{ padding: '0.5rem', fontSize: '0.7rem', textAlign: 'center' }}>RETORNOS</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {accData.map((item, idx) => (
-                    <tr key={idx}>
-                      <td style={{ padding: '0.6rem 0.5rem', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)' }}>{item.name}</td>
-                      <td style={{ padding: '0.6rem 0.5rem', fontSize: '0.85rem', textAlign: 'center', color: '#38bdf8', fontWeight: 700 }}>{item.checkout}</td>
-                      <td style={{ padding: '0.6rem 0.5rem', fontSize: '0.85rem', textAlign: 'center', color: '#ef4444', fontWeight: 700 }}>{item.return}</td>
-                    </tr>
-                  ))}
-                  {accData.length === 0 && (
+              <div className="table-container" style={{ marginTop: 0 }}>
+                <table style={{ marginTop: 0, width: '100%', borderSpacing: '0 4px' }}>
+                  <thead style={{ position: 'sticky', top: 0, background: 'var(--bg-card)', zIndex: 1, backdropFilter: 'blur(8px)' }}>
                     <tr>
-                      <td colSpan="3" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)', fontSize: '0.8rem' }}>Sem movimentações no período</td>
+                      <th style={{ padding: '0.5rem', fontSize: '0.7rem' }}>CÓDIGO</th>
+                      <th style={{ padding: '0.5rem', fontSize: '0.7rem', textAlign: 'center' }}>SAÍDAS</th>
+                      <th style={{ padding: '0.5rem', fontSize: '0.7rem', textAlign: 'center' }}>RETORNOS</th>
                     </tr>
-                  )}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {accData.map((item, idx) => (
+                      <tr key={idx}>
+                        <td style={{ padding: '0.6rem 0.5rem', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)' }}>{item.name}</td>
+                        <td style={{ padding: '0.6rem 0.5rem', fontSize: '0.85rem', textAlign: 'center', color: '#38bdf8', fontWeight: 700 }}>{item.checkout}</td>
+                        <td style={{ padding: '0.6rem 0.5rem', fontSize: '0.85rem', textAlign: 'center', color: '#ef4444', fontWeight: 700 }}>{item.return}</td>
+                      </tr>
+                    ))}
+                    {accData.length === 0 && (
+                      <tr>
+                        <td colSpan="3" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)', fontSize: '0.8rem' }}>Sem movimentações no período</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>

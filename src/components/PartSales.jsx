@@ -102,7 +102,7 @@ export default function PartSales({ movements, setMovements, accessories, respon
           <h3 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <ClipboardCheck size={20} className="accent" /> Pendentes de Check-in
           </h3>
-          <div style={{ overflowX: 'auto' }}>
+          <div className="table-container">
             <table>
               <thead>
                 <tr>
@@ -173,7 +173,7 @@ export default function PartSales({ movements, setMovements, accessories, respon
               </div>
             )}
           </div>
-          <div style={{ overflowX: 'auto' }}>
+          <div className="table-container">
             <table>
               <thead>
                 <tr>

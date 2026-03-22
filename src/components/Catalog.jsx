@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Plus, Trash2, User, Package, Users, ShieldCheck, UserPlus, Lock, Edit2, Check, X, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, Trash2, User, Package, Users, ShieldCheck, UserPlus, Lock, Edit2, Check, X, ChevronLeft, ChevronRight, Search } from 'lucide-react'
 import { getAllData, addRecord, deleteRecord } from '../utils/db'
 
 export default function Catalog({ accessories, setAccessories, responsibles, setResponsibles, currentUser }) {
@@ -9,6 +9,8 @@ export default function Catalog({ accessories, setAccessories, responsibles, set
   // Paginação
   const [currentPageAcc, setCurrentPageAcc] = useState(1)
   const [currentPageResp, setCurrentPageResp] = useState(1)
+  const [searchTermAcc, setSearchTermAcc] = useState('')
+  const [searchTermResp, setSearchTermResp] = useState('')
   const itemsPerPage = 5
 
   // Edição
@@ -98,9 +100,17 @@ export default function Catalog({ accessories, setAccessories, responsibles, set
     setEditingResp(null)
   }
 
-  // Ordenação Alfabética
-  const sortedAccessories = [...accessories].sort((a, b) => a.factoryCode.localeCompare(b.factoryCode))
-  const sortedResponsibles = [...responsibles].sort((a, b) => a.name.localeCompare(b.name))
+  // Ordenação e Filtragem
+  const filteredAccessories = accessories.filter(acc => 
+    acc.factoryCode.toLowerCase().includes(searchTermAcc.toLowerCase()) || 
+    acc.commercialName.toLowerCase().includes(searchTermAcc.toLowerCase())
+  )
+  const sortedAccessories = [...filteredAccessories].sort((a, b) => a.factoryCode.localeCompare(b.factoryCode))
+
+  const filteredResponsibles = responsibles.filter(resp => 
+    resp.name.toLowerCase().includes(searchTermResp.toLowerCase())
+  )
+  const sortedResponsibles = [...filteredResponsibles].sort((a, b) => a.name.localeCompare(b.name))
 
   // Paginação
   const totalPagesAcc = Math.ceil(sortedAccessories.length / itemsPerPage)
@@ -140,7 +150,21 @@ export default function Catalog({ accessories, setAccessories, responsibles, set
             </button>
           </form>
 
-          <div style={{ marginTop: '2rem', overflowX: 'auto' }}>
+          <div className="input-with-icon" style={{ marginTop: '1.5rem' }}>
+            <Search size={18} style={{ left: '0.85rem' }} />
+            <input 
+              type="text" 
+              placeholder="Pesquisar acessórios..." 
+              value={searchTermAcc}
+              onChange={(e) => {
+                setSearchTermAcc(e.target.value)
+                setCurrentPageAcc(1)
+              }}
+              style={{ paddingLeft: '2.5rem' }}
+            />
+          </div>
+
+          <div className="table-container">
             <table>
               <thead>
                 <tr>
@@ -239,7 +263,21 @@ export default function Catalog({ accessories, setAccessories, responsibles, set
             </button>
           </form>
 
-          <div style={{ marginTop: '2rem', overflowX: 'auto' }}>
+          <div className="input-with-icon" style={{ marginTop: '1.5rem' }}>
+            <Search size={18} style={{ left: '0.85rem' }} />
+            <input 
+              type="text" 
+              placeholder="Pesquisar responsáveis..." 
+              value={searchTermResp}
+              onChange={(e) => {
+                setSearchTermResp(e.target.value)
+                setCurrentPageResp(1)
+              }}
+              style={{ paddingLeft: '2.5rem' }}
+            />
+          </div>
+
+          <div className="table-container">
             <table>
               <thead>
                 <tr>
