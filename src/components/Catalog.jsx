@@ -347,7 +347,7 @@ export default function Catalog({ accessories, setAccessories, responsibles, set
         </div>
 
         {currentUser?.role === 'admin' && (
-          <div className="card" style={{ border: '1px solid rgba(56, 189, 248, 0.3)' }}>
+          <div className="card">
             <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '2rem' }}>
               <ShieldCheck className="accent" size={28} /> Gestão de Usuários
             </h2>
