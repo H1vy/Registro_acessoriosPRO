@@ -66,6 +66,13 @@ export default function Catalog({ accessories, setAccessories, responsibles, set
   const addAccessory = (e) => {
     e.preventDefault()
     if (!newAcc.factoryCode || !newAcc.commercialName) return
+    
+    const isDuplicate = accessories.some(acc => acc.factoryCode.toLowerCase() === newAcc.factoryCode.toLowerCase())
+    if (isDuplicate) {
+      alert('Já existe um acessório cadastrado com este Código de Fábrica.')
+      return
+    }
+
     setAccessories([...accessories, { ...newAcc, id: Date.now().toString() }])
     setNewAcc({ factoryCode: '', commercialName: '' })
   }
@@ -73,6 +80,13 @@ export default function Catalog({ accessories, setAccessories, responsibles, set
   const addResponsible = (e) => {
     e.preventDefault()
     if (!newResp.name) return
+
+    const isDuplicate = responsibles.some(resp => resp.name.toLowerCase() === newResp.name.toLowerCase())
+    if (isDuplicate) {
+      alert('Já existe um responsável cadastrado com este Nome.')
+      return
+    }
+
     setResponsibles([...responsibles, { ...newResp, id: Date.now().toString() }])
     setNewResp({ name: '' })
   }
