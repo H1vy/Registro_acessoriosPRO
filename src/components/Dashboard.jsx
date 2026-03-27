@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import { Download, TrendingUp, Users, Package, Calendar } from 'lucide-react'
 import * as XLSX from 'xlsx'
@@ -8,6 +8,18 @@ export default function Dashboard({ movements, accessories, responsibles }) {
   const [customStartDate, setCustomStartDate] = useState('')
   const [customEndDate, setCustomEndDate] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
+  const [activeResponsible, setActiveResponsible] = useState(null)
+  const chartRef = useRef(null)
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (chartRef.current && !chartRef.current.contains(e.target)) {
+        setActiveResponsible(null)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   const filterMovements = (movs) => {
     const now = new Date()
@@ -96,7 +108,18 @@ export default function Dashboard({ movements, accessories, responsibles }) {
       const resp = responsibles.find(r => r.id === m.responsibleId)
       if (!resp) return
       const key = resp.name
-      if (!data[key]) data[key] = { name: key, count: 0 }
+      if (!data[key]) data[key] = { name: key, count: 0, movements: [] }
+      
+      const acc = accessories.find(a => a.id === m.accessoryId)
+      let inDate = null;
+      if (m.isReturn && m.returnInfo) inDate = m.returnInfo.timestamp;
+      else if (m.checkin) inDate = m.checkin.timestamp;
+      
+      data[key].movements.push({
+        code: acc ? acc.factoryCode : 'Desconhecido',
+        out: m.timestamp,
+        in: inDate
+      })
       data[key].count++
     })
     return Object.values(data).sort((a, b) => b.count - a.count)
@@ -321,10 +344,10 @@ export default function Dashboard({ movements, accessories, responsibles }) {
           </div>
         </div>
 
-        <div className="card" style={{ height: '400px' }}>
+        <div className="card" style={{ height: '400px', position: 'relative' }} ref={chartRef}>
           <h3>Participação por Responsável</h3>
           <ResponsiveContainer width="100%" height="90%">
-            <PieChart>
+            <PieChart onClick={(e) => { if (!e) setActiveResponsible(null) }}>
               <Pie
                 data={respData}
                 cx="50%"
@@ -334,24 +357,67 @@ export default function Dashboard({ movements, accessories, responsibles }) {
                 fill="#8884d8"
                 dataKey="count"
                 label={({ name }) => name}
+                onClick={(data, index, e) => {
+                  if (e) e.stopPropagation();
+                  setActiveResponsible(data.payload);
+                }}
+                style={{ cursor: 'pointer' }}
               >
                 {respData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>
-              <Tooltip 
-                contentStyle={{ 
-                  background: 'rgba(30, 41, 59, 0.8)', 
-                  backdropFilter: 'blur(12px)',
-                  WebkitBackdropFilter: 'blur(12px)',
-                  border: '1px solid rgba(148, 163, 184, 0.2)',
-                  borderRadius: '12px',
-                  boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3)'
-                }}
-                itemStyle={{ fontSize: '0.85rem', fontWeight: 600, color: '#f8fafc' }}
-              />
             </PieChart>
           </ResponsiveContainer>
+
+          {activeResponsible && (
+            <div className="custom-scrollbar" style={{
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              zIndex: 1000,
+              background: 'rgba(30, 41, 59, 0.95)',
+              backdropFilter: 'blur(12px)',
+              WebkitBackdropFilter: 'blur(12px)',
+              border: '1px solid rgba(148, 163, 184, 0.2)',
+              borderRadius: '12px',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.5)',
+              padding: '1rem',
+              width: '320px',
+              maxHeight: '300px',
+              overflowY: 'auto',
+              color: '#f8fafc',
+            }}
+            onClick={(e) => e.stopPropagation()}
+            >
+              <h4 style={{ margin: '0 0 0.8rem 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span>{activeResponsible.name}</span>
+                <span style={{ backgroundColor: 'var(--accent)', color: '#000', padding: '2px 8px', borderRadius: '12px', fontSize: '0.8rem' }}>Total: {activeResponsible.count}</span>
+              </h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                {[...activeResponsible.movements].sort((a, b) => new Date(b.out) - new Date(a.out)).map((mov, i) => (
+                  <div key={i} style={{ 
+                    fontSize: '0.8rem', 
+                    background: 'rgba(15, 23, 42, 0.5)', 
+                    padding: '0.5rem', 
+                    borderRadius: '8px',
+                    borderLeft: mov.in ? '3px solid var(--success)' : '3px solid var(--accent)'
+                  }}>
+                    <strong style={{ color: 'var(--text-primary)', display: 'block', marginBottom: '4px' }}>{mov.code}</strong>
+                    <div style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', lineHeight: '1.4' }}>
+                      <div>Retirada: {new Date(mov.out).toLocaleString('pt-BR')}</div>
+                      {mov.in ? (
+                        <div style={{ color: '#6ee7b7' }}>Retorno: {new Date(mov.in).toLocaleString('pt-BR')}</div>
+                      ) : (
+                        <div style={{ color: '#fbbf24' }}>Pendente</div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

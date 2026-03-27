@@ -11,7 +11,8 @@ export default function Catalog({ accessories, setAccessories, responsibles, set
   const [currentPageResp, setCurrentPageResp] = useState(1)
   const [searchTermAcc, setSearchTermAcc] = useState('')
   const [searchTermResp, setSearchTermResp] = useState('')
-  const itemsPerPage = 5
+  const itemsPerPageAcc = 5
+  const itemsPerPageResp = 10
 
   // Edição
   const [editingAcc, setEditingAcc] = useState(null) // ID do acessório em edição
@@ -127,11 +128,11 @@ export default function Catalog({ accessories, setAccessories, responsibles, set
   const sortedResponsibles = [...filteredResponsibles].sort((a, b) => a.name.localeCompare(b.name))
 
   // Paginação
-  const totalPagesAcc = Math.ceil(sortedAccessories.length / itemsPerPage)
-  const paginatedAcc = sortedAccessories.slice((currentPageAcc - 1) * itemsPerPage, currentPageAcc * itemsPerPage)
+  const totalPagesAcc = Math.ceil(sortedAccessories.length / itemsPerPageAcc)
+  const paginatedAcc = sortedAccessories.slice((currentPageAcc - 1) * itemsPerPageAcc, currentPageAcc * itemsPerPageAcc)
 
-  const totalPagesResp = Math.ceil(sortedResponsibles.length / itemsPerPage)
-  const paginatedResp = sortedResponsibles.slice((currentPageResp - 1) * itemsPerPage, currentPageResp * itemsPerPage)
+  const totalPagesResp = Math.ceil(sortedResponsibles.length / itemsPerPageResp)
+  const paginatedResp = sortedResponsibles.slice((currentPageResp - 1) * itemsPerPageResp, currentPageResp * itemsPerPageResp)
 
   return (
     <div className="tab-content">

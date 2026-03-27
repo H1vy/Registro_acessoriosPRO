@@ -97,7 +97,7 @@ export default function PartSales({ movements, setMovements, accessories, respon
         </div>
       </div>
 
-      <div className="grid">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
         <div className="card">
           <h3 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <ClipboardCheck size={20} className="accent" /> Pendentes de Check-in
@@ -123,10 +123,10 @@ export default function PartSales({ movements, setMovements, accessories, respon
                 ) : (
                   activeMovements.map(m => (
                     <tr key={m.id}>
-                      <td style={{ fontSize: '0.85rem' }}>{formatDate(m.timestamp)}</td>
-                      <td style={{ fontWeight: 600 }}>{getAccessoryLabel(m.accessoryId)}</td>
-                      <td>{getResponsibleName(m.responsibleId)}</td>
-                      <td><code style={{ background: 'var(--bg-input)', padding: '2px 6px', borderRadius: '4px' }}>{m.soNumber || '-'}</code></td>
+                      <td style={{ fontSize: '0.85rem', whiteSpace: 'nowrap' }}>{formatDate(m.timestamp)}</td>
+                      <td style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{getAccessoryLabel(m.accessoryId)}</td>
+                      <td style={{ whiteSpace: 'nowrap' }}>{getResponsibleName(m.responsibleId)}</td>
+                      <td><code style={{ background: 'var(--bg-input)', padding: '2px 6px', borderRadius: '4px', whiteSpace: 'nowrap' }}>{m.soNumber || '-'}</code></td>
                       <td style={{ textAlign: 'center' }}>
                         <button 
                           className="btn-primary" 
@@ -192,9 +192,9 @@ export default function PartSales({ movements, setMovements, accessories, respon
                 ) : (
                   currentCheckedIn.map(m => (
                     <tr key={m.id}>
-                      <td style={{ fontWeight: 500, fontSize: '0.85rem' }}>{getAccessoryLabel(m.accessoryId)}</td>
-                      <td style={{ fontSize: '0.85rem' }}>{formatDate(m.checkin.timestamp)}</td>
-                      <td>
+                      <td style={{ fontWeight: 500, fontSize: '0.85rem', whiteSpace: 'nowrap' }}>{getAccessoryLabel(m.accessoryId)}</td>
+                      <td style={{ fontSize: '0.85rem', whiteSpace: 'nowrap' }}>{formatDate(m.checkin.timestamp)}</td>
+                      <td style={{ whiteSpace: 'nowrap' }}>
                         <div className="badge-author" style={{ fontSize: '0.75rem' }}>
                           <User size={12} /> {m.checkin.author}
                         </div>
