@@ -1,4 +1,4 @@
-import { ref, get, set, child, remove, push } from "firebase/database";
+import { ref, get, set, child, remove, push, onValue } from "firebase/database";
 import { dbFB } from "./firebase";
 
 export const getAllData = async (storeName) => {
@@ -19,6 +19,22 @@ export const getAllData = async (storeName) => {
     console.error(`Erro ao buscar ${storeName}:`, error);
     return [];
   }
+};
+
+export const subscribeToData = (storeName, callback) => {
+  const dbRef = ref(dbFB, storeName);
+  return onValue(dbRef, (snapshot) => {
+    if (snapshot.exists()) {
+      const data = snapshot.val();
+      if (Array.isArray(data)) {
+        callback(data.filter(item => item !== null));
+      } else {
+        callback(Object.values(data));
+      }
+    } else {
+      callback([]);
+    }
+  });
 };
 
 export const addRecord = async (storeName, record) => {

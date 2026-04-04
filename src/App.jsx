@@ -8,7 +8,7 @@ import Catalog from './components/Catalog'
 import PartSales from './components/PartSales'
 import Login from './components/Login'
 import AdminPanel from './components/AdminPanel'
-import { getAllData, saveData, seedAdminUser } from './utils/db'
+import { getAllData, saveData, seedAdminUser, subscribeToData } from './utils/db'
 import { LogOut, User, Shield } from 'lucide-react'
 
 function App() {
@@ -31,7 +31,12 @@ function App() {
       setCurrentUser(JSON.parse(savedUser))
     }
 
-    const loadInitialData = async () => {
+    // Assinar mudanças do Firebase em tempo real
+    const unsubAcc = subscribeToData('accessories', setAccessories);
+    const unsubResp = subscribeToData('responsibles', setResponsibles);
+    const unsubMov = subscribeToData('movements', setMovements);
+
+    const checkMigrationAndLoad = async () => {
       try {
         let acc = await getAllData('accessories')
         let resp = await getAllData('responsibles')
@@ -43,13 +48,11 @@ function App() {
           const lsMov = JSON.parse(localStorage.getItem('movements') || '[]')
           
           if (lsAcc.length > 0 || lsResp.length > 0 || lsMov.length > 0) {
-            acc = lsAcc; resp = lsResp; mov = lsMov;
+            await saveData('accessories', lsAcc)
+            await saveData('responsibles', lsResp)
+            await saveData('movements', lsMov)
           }
         }
-
-        setAccessories(acc)
-        setResponsibles(resp)
-        setMovements(mov)
       } catch (error) {
         console.error("Erro ao carregar dados:", error)
       } finally {
@@ -57,7 +60,13 @@ function App() {
       }
     }
 
-    loadInitialData()
+    checkMigrationAndLoad()
+
+    return () => {
+      unsubAcc();
+      unsubResp();
+      unsubMov();
+    }
   }, [])
 
   const handleLogin = (user) => {
@@ -72,18 +81,24 @@ function App() {
     }
   }
 
-  // Persistência Automática via useEffect
-  useEffect(() => {
-    if (!loading) saveData('accessories', accessories);
-  }, [accessories, loading]);
+  // Funções de atualização explícita para evitar loopings e race conditions do useEffect
+  const handleSetAccessories = (newData) => {
+    const resolved = typeof newData === 'function' ? newData(accessories) : newData;
+    setAccessories(resolved);
+    saveData('accessories', resolved);
+  };
 
-  useEffect(() => {
-    if (!loading) saveData('responsibles', responsibles);
-  }, [responsibles, loading]);
+  const handleSetResponsibles = (newData) => {
+    const resolved = typeof newData === 'function' ? newData(responsibles) : newData;
+    setResponsibles(resolved);
+    saveData('responsibles', resolved);
+  };
 
-  useEffect(() => {
-    if (!loading) saveData('movements', movements);
-  }, [movements, loading]);
+  const handleSetMovements = (newData) => {
+    const resolved = typeof newData === 'function' ? newData(movements) : newData;
+    setMovements(resolved);
+    saveData('movements', resolved);
+  };
 
   const exportBackup = () => {
     const data = { accessories, responsibles, movements, exportDate: new Date().toISOString() }
@@ -137,7 +152,7 @@ function App() {
             movements={movements} 
             accessories={accessories} 
             responsibles={responsibles} 
-            setMovements={setMovements}
+            setMovements={handleSetMovements}
             currentUser={currentUser}
           />
         )
@@ -145,9 +160,9 @@ function App() {
         return (
           <Catalog 
             accessories={accessories} 
-            setAccessories={setAccessories}
+            setAccessories={handleSetAccessories}
             responsibles={responsibles}
-            setResponsibles={setResponsibles}
+            setResponsibles={handleSetResponsibles}
             currentUser={currentUser}
           />
         )
@@ -157,12 +172,12 @@ function App() {
             movements={movements} 
             accessories={accessories} 
             responsibles={responsibles} 
-            setMovements={setMovements}
+            setMovements={handleSetMovements}
             currentUser={currentUser}
           />
         )
       case 'admin':
-        return <AdminPanel currentUser={currentUser} setMovements={setMovements} />
+        return <AdminPanel currentUser={currentUser} setMovements={handleSetMovements} />
       default:
         return <Movements currentUser={currentUser} />
     }
