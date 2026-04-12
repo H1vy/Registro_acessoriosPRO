@@ -50,7 +50,7 @@ export default function Login({ onLogin }) {
       const fbUser = userCredential.user;
 
       const users = await getAllData('users');
-      const dbUser = users.find(u => u.id === fbUser.uid);
+      const dbUser = users.find(u => u.id === fbUser.uid || (fbUser.email && u.email === fbUser.email));
       
       if (dbUser) {
         if (isAdminMode && dbUser.role !== 'admin') {
