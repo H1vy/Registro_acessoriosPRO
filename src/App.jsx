@@ -9,8 +9,9 @@ import PartSales from './components/PartSales'
 import Login from './components/Login'
 import AdminPanel from './components/AdminPanel'
 import { getAllData, saveData, seedAdminUser, subscribeToData } from './utils/db'
+import { auth } from './utils/firebase'
+import { onAuthStateChanged, signOut } from 'firebase/auth'
 import { LogOut, User, Shield } from 'lucide-react'
-
 function App() {
   const [activeTab, setActiveTab] = useState('movements')
   const [accessories, setAccessories] = useState([])
@@ -25,11 +26,31 @@ function App() {
     // Semeia o admin se necessário
     seedAdminUser()
 
-    // Tentar recuperar sessão salva
+    // Inicialmente carrega de localStorage para evitar piscar página, 
+    // mas o AuthStateChanged confirmará no servidor em seguida.
     const savedUser = localStorage.getItem('currentUser')
     if (savedUser) {
       setCurrentUser(JSON.parse(savedUser))
     }
+
+    const unsubscribeAuth = onAuthStateChanged(auth, async (fbUser) => {
+      if (fbUser) {
+        // Tenta obter o role
+        const users = await getAllData('users');
+        const dbUser = users.find(u => u.id === fbUser.uid);
+        if (dbUser) {
+          setCurrentUser(dbUser);
+          localStorage.setItem('currentUser', JSON.stringify(dbUser));
+        } else {
+          setCurrentUser(null);
+          localStorage.removeItem('currentUser');
+          signOut(auth);
+        }
+      } else {
+        setCurrentUser(null);
+        localStorage.removeItem('currentUser');
+      }
+    });
 
     // Assinar mudanças do Firebase em tempo real
     const unsubAcc = subscribeToData('accessories', setAccessories);
@@ -63,6 +84,7 @@ function App() {
     checkMigrationAndLoad()
 
     return () => {
+      unsubscribeAuth();
       unsubAcc();
       unsubResp();
       unsubMov();
@@ -74,8 +96,13 @@ function App() {
     localStorage.setItem('currentUser', JSON.stringify(user))
   }
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     if (window.confirm('Deseja realmente sair?')) {
+      try {
+        await signOut(auth);
+      } catch (err) {
+        console.error("Erro ao sair:", err);
+      }
       setCurrentUser(null)
       localStorage.removeItem('currentUser')
     }

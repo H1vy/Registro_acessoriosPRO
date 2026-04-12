@@ -1,0 +1,16 @@
+{
+  "rules": {
+    // Apenas usuários logados no Firebase Auth podem ler dados
+    ".read": "auth != null",
+    
+    // Apenas usuários logados no Firebase Auth podem gravar dados
+    ".write": "auth != null",
+    
+    "users": {
+        // Exemplo adicional: Caso queira ser ainda mais estrito no futuro,
+        // pode-se permitir que apenas o Admin altere usuários, e usuários 
+        // comuns apenas leiam. Por enquanto, a regra principal acima já 
+        // bloqueia 100% de invasões públicas.
+    }
+  }
+}

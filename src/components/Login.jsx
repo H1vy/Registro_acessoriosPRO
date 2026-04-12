@@ -1,13 +1,16 @@
 import React, { useState } from 'react';
-import { User, Lock, ArrowRight, UserPlus, Eye, EyeOff } from 'lucide-react';
-import { addRecord, getAllData } from '../utils/db';
+import { User, Lock, ArrowRight, Mail, Eye, EyeOff } from 'lucide-react';
+import { getAllData } from '../utils/db';
+import { auth } from '../utils/firebase';
+import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
 
 export default function Login({ onLogin }) {
   const [isAdminMode, setIsAdminMode] = useState(false);
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [tilt, setTilt] = useState({ x: 0, y: 0 });
@@ -36,30 +39,42 @@ export default function Login({ onLogin }) {
     e.preventDefault();
     setError('');
 
-    if (!username || !password) {
+    if (!email || !password) {
       setError('Por favor, preencha todos os campos.');
       return;
     }
 
+    setLoading(true);
     try {
+      const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password.trim());
+      const fbUser = userCredential.user;
+
       const users = await getAllData('users');
+      const dbUser = users.find(u => u.id === fbUser.uid);
       
-      const user = users.find(u => u.username.trim() === username.trim() && u.password.trim() === password.trim());
-      
-      if (user) {
-        if (isAdminMode && user.role !== 'admin') {
+      if (dbUser) {
+        if (isAdminMode && dbUser.role !== 'admin') {
           setError('Esta conta não possui privilégios de administrador.');
-        } else if (!isAdminMode && user.role === 'admin') {
+          await signOut(auth);
+        } else if (!isAdminMode && dbUser.role === 'admin') {
           setError('Utilize a aba "Acesso Master" para entrar como administrador.');
+          await signOut(auth);
         } else {
-          onLogin(user);
+          onLogin(dbUser);
         }
       } else {
-        setError('Usuário ou senha inválidos.');
+        setError('Registro de usuário não encontrado no banco de dados.');
+        await signOut(auth);
       }
     } catch (err) {
       console.error(err);
-      setError('Erro ao processar autenticação.');
+      if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
+        setError('E-mail ou senha inválidos.');
+      } else {
+        setError('Erro na autenticação: ' + err.code);
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -71,7 +86,6 @@ export default function Login({ onLogin }) {
       style={{ perspective: '1000px' }}
     >
       <div className="login-blobs">
-        {/* Each blob is pushed AWAY from the cursor with unique strength & lag */}
         <div style={{ transform: `translate(${mousePos.x * 3}px, ${mousePos.y * 3}px)`, transition: 'transform 0.6s cubic-bezier(0.25,0.46,0.45,0.94)', position: 'absolute', inset: 0 }}>
           <div className="blob blob-1"></div>
         </div>
@@ -102,14 +116,15 @@ export default function Login({ onLogin }) {
 
         <form onSubmit={handleSubmit} className="login-form">
           <div className="input-group">
-            <label>Usuário</label>
+            <label>E-mail</label>
             <div className="input-with-icon">
-              <User size={18} />
+              <Mail size={18} />
               <input 
-                type="text" 
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder={isAdminMode ? "Admin" : "Seu nome de usuário"}
+                type="email" 
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder={isAdminMode ? "admin@acessoriospro.com" : "seu@email.com"}
+                disabled={loading}
               />
             </div>
           </div>
@@ -123,6 +138,7 @@ export default function Login({ onLogin }) {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
+                disabled={loading}
               />
               <button 
                 type="button"
@@ -137,9 +153,9 @@ export default function Login({ onLogin }) {
 
           {error && <div className="login-error">{error}</div>}
 
-          <button type="submit" className="btn-primary login-submit">
-            {isAdminMode ? 'Autenticar Master' : 'Acessar Sistema'}
-            <ArrowRight size={18} />
+          <button type="submit" className="btn-primary login-submit" disabled={loading}>
+            {loading ? 'Autenticando...' : (isAdminMode ? 'Autenticar Master' : 'Acessar Sistema')}
+            {!loading && <ArrowRight size={18} />}
           </button>
         </form>
 

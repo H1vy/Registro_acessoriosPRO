@@ -1,0 +1,418 @@
+{
+  "version": "2.0",
+  "project": {
+    "name": "Registro de Acessórios Pro",
+    "type": "Enterprise Web Application (SPA)",
+    "description": "Sistema de gerenciamento de acessórios, movimentações patrimoniais e controle de estoque com funcionalidades de dashboard analítico e relatórios",
+    "maturity": "Production-ready, multi-user, real-time"
+  },
+  "architecture": {
+    "pattern": "Component-Based Architecture com Feature-Based Organization",
+    "stateManagement": "React Context + Custom Hooks (sem library externa)",
+    "dataFlow": "Unidirectional Data Flow com prop drilling controlado",
+    "layering": {
+      "presentation": "React Components (presentational + container)",
+      "business": "Custom Hooks e util functions",
+      "data": "Firebase SDK + LocalStorage Cache Layer"
+    },
+    "errorBoundaries": "Implementar Error Boundary para resiliência",
+    "codeSplitting": "Dynamic imports para routes e heavy components"
+  },
+  "technologies": {
+    "core": {
+      "runtime": "Node.js 18+",
+      "framework": "React 18+ com hooks",
+      "buildTool": "Vite 5+ (dev server, build, preview)",
+      "routing": "React Router v6+ (lazy routes)"
+    },
+    "frontend": [
+      "React 18 (Concurrent features, automatic batching)",
+      "React.lazy() + Suspense",
+      "Custom Hooks (useMemo, useCallback, useTransition)",
+      "Web Workers (para processamento pesado)"
+    ],
+    "icons": ["Lucide React (tree-shakeable)"],
+    "charts": ["Recharts (com custom tooltip, responsive)"],
+    "excel": ["XLSX (SheetJS) - with worker optimization"],
+    "ui": ["CSS Modules + CSS Variables", "Framer Motion (animações)", "React DnD (drag-drop)"]
+  },
+  "backend": {
+    "provider": "Firebase",
+    "services": {
+      "auth": "Firebase Auth (multi-provider: email/password, Google)",
+      "database": "Cloud Firestore (real-time subscriptions)",
+      "storage": "Cloud Storage (imagens/arquivos)",
+      "functions": "Cloud Functions (server-side logic)"
+    },
+    "security": "Firestore Security Rules, Auth emiddleware"
+  },
+  "dataLayer": {
+    "firestoreCollections": ["accessories", "responsibles", "movements", "users"],
+    "indexes": "Compound indexes para queries frequentes",
+    "caching": "Dual-layer: Firestore (primário) + localStorage (cache inicial)",
+    "syncStrategy": "Optimistic UI updates com eventual consistency",
+    "errorRecovery": "Retry logic, exponential backoff, offline persistence"
+  },
+  "dataModels": {
+    "accessories": {
+      "id": "string (Firestore doc ID)",
+      "factoryCode": "string (unique, indexed)",
+      "commercialName": "string",
+      "category": "string (enum: 'equipment', 'tool', 'consumable', 'accessory')",
+      "responsible": "string",
+      "location": "string",
+      "purchaseDate": "timestamp",
+      "warrantyEnd": "timestamp",
+      "status": "string (enum: 'available', 'in-use', 'maintenance', 'retired')",
+      "metadata": "map (custom fields)",
+      "createdAt": "timestamp",
+      "updatedAt": "timestamp",
+      "createdBy": "string (user id)"
+    },
+    "responsibles": {
+      "id": "string",
+      "name": "string",
+      "email": "string",
+      "department": "string (indexed)",
+      "role": "string (enum: 'technician', 'manager', 'admin')",
+      "phone": "string",
+      "active": "boolean",
+      "createdAt": "timestamp",
+      "createdBy": "string"
+    },
+    "movements": {
+      "id": "string",
+      "accessoryId": "string (indexed)",
+      "responsibleId": "string (indexed)",
+      "type": "string (enum: 'checkout', 'return', 'transfer', 'maintenance')",
+      "timestamp": "timestamp (indexed)",
+      "author": "string (user id, indexed)",
+      "soNumber": "string (Work Order)",
+      "notes": "string",
+      "attachments": "array (file URLs)",
+      "annulled": "boolean",
+      "annulmentReason": "string",
+      "annulledBy": "string",
+      "annulmentTimestamp": "timestamp",
+      "isReturn": "boolean (legacy)",
+      "returnInfo": {
+        "returnedBy": "string",
+        "timestamp": "timestamp",
+        "condition": "string (enum: 'good', 'damaged', 'needs-maintenance')",
+        "notes": "string"
+      },
+      "checkin": {
+        "author": "string",
+        "timestamp": "timestamp",
+        "notes": "string"
+      },
+      "isDeleted": "boolean (soft delete)",
+      "deletionReason": "string",
+      "deletedBy": "string",
+      "deletionTimestamp": "timestamp"
+    },
+    "users": {
+      "id": "string (Firebase UID)",
+      "username": "string",
+      "email": "string",
+      "role": "string (enum: 'user', 'admin', 'superadmin')",
+      "permissions": "array (granular permissions)",
+      "lastLogin": "timestamp",
+      "createdAt": "timestamp",
+      "createdBy": "string"
+    }
+  },
+  "features": {
+    "authentication": {
+      "providers": ["email/password", "Google OAuth"],
+      " MFA": false,
+      "session": "JWT tokens via Firebase",
+      "persist": "localStorage com encryption (simulated)",
+      "roles": ["user", "admin", "superadmin"],
+      "permissions": ["read", "write", "delete", "annul", "export", "admin"]
+    },
+    "movements": {
+      "checkout": "Registro de saída com validações",
+      "return": "Registro de retorno com condição",
+      "transfer": "Transferência entre responsáveis",
+      "annulment": "Anulação com justificativa (audit trail)",
+      "softDelete": "Delete lógico preservando histórico"
+    },
+    "catalog": {
+      "CRUD": "Create, Read, Update, Delete de acessórios",
+      "search": "Busca por código, nome, categoria",
+      "filters": "Por status, responsável, categoria",
+      "bulk": "Bulk operations (import/export)"
+    },
+    "dashboard": {
+      "charts": {
+        "bar": "Movimentações por dia/código",
+        "pie": "Participação por responsável",
+        "line": "Tendência temporal",
+        "treemap": "Por categoria"
+      },
+      "filters": {
+        "quick": "Hoje, Semana, Mês, Ano, Personalizado",
+        "dateRange": "Date pickers custom",
+        "search": "Busca em tempo real"
+      },
+      "metrics": {
+        "totalMovements": "Count com filtro",
+        "activeItems": "Patrimônio ativo",
+        "pendingReturns": "Itens não retornados",
+        "byResponsible": "Por responsável"
+      },
+      "export": "XLSX com formatação, múltiplas abas"
+    },
+    "reports": {
+      "excel": "Export múltiplas sheets",
+      "pdf": "Relatórios formatados",
+      "scheduled": "Relatórios automáticos (future)"
+    },
+    "admin": {
+      "userManagement": "CRUD usuários, roles",
+      "auditLog": "Histórico de ações",
+      "settings": "Configurações do sistema",
+      "backup": "Manual e automático"
+    },
+    "partSales": {
+      "items": "Registro de peças vendidas",
+      "revenue": "Métricas de receita"
+    }
+  },
+  "uiPatterns": {
+    "theme": {
+      "mode": "Dark mode primary",
+      "designSystem": "Glassmorphism + Neumorphism hybrid",
+      "tokens": {
+        "colors": {
+          "primary": "#38bdf8",
+          "primary-hover": "#0ea5e9",
+          "secondary": "#10b981",
+          "danger": "#ef4444",
+          "warning": "#fbbf24",
+          "background": "#020617",
+          "surface": "rgba(30, 41, 59, 0.7)",
+          "surface-elevated": "rgba(15, 23, 42, 0.9)",
+          "border": "rgba(51, 65, 85, 0.5)",
+          "text": "#f8fafc",
+          "text-secondary": "#94a3b8"
+        },
+        "spacing": "4px base (0.25rem)",
+        "radius": {
+          "sm": "6px",
+          "md": "12px",
+          "lg": "16px",
+          "xl": "24px"
+        },
+        "shadows": {
+          "sm": "0 1px 2px rgba(0,0,0,0.05)",
+          "md": "0 4px 6px -1px rgba(0,0,0,0.1)",
+          "lg": "0 10px 15px -3px rgba(0,0,0,0.1)",
+          "glow": "0 0 20px rgba(56, 189, 248, 0.15)"
+        }
+      }
+    },
+    "components": {
+      "cards": {
+        "style": "Glassmorphism com backdrop-blur",
+        "border": "1px solid rgba(255,255,255,0.08)",
+        "hover": "translateY(-2px) + border glow"
+      },
+      "buttons": {
+        "primary": "Accent background, dark text",
+        "secondary": "Transparent with border",
+        "ghost": "No background, subtle hover",
+        "icon": "Circular or rounded square",
+        "loading": "Spinner state with disabled"
+      },
+      "inputs": {
+        "style": "Glassmorphism with border transition",
+        "focus": "Accent border + glow ring",
+        "error": "Danger border + message",
+        "success": "Green check indicator"
+      },
+      "tables": {
+        "style": "Row hover, alternating subtle bg",
+        "pagination": "Client-side with page size selector",
+        "sorting": "Click headers to sort",
+        "selection": "Checkbox column"
+      },
+      "modals": {
+        "backdrop": "rgba(0,0,0,0.7) blur",
+        "animation": "Scale + fade entrance",
+        "close": "X button + ESC key + click outside"
+      },
+      "toasts": {
+        "position": "Bottom-right",
+        "types": "success, error, warning, info",
+        "autoClose": "5 seconds default",
+        "dismissible": "Close button"
+      }
+    },
+    "animations": {
+      "pageTransitions": "Fade + slide (300ms ease-out)",
+      "microInteractions": "Hover scales, button presses",
+      "loading": "Skeleton screens + spinners",
+      "charts": "Staggered entrance animations",
+      "listItems": "Stagger reveal on mount"
+    },
+    "responsive": {
+      "breakpoints": {
+        "mobile": "640px",
+        "tablet": "768px",
+        "desktop": "1024px",
+        "wide": "1400px"
+      },
+      "strategies": {
+        "layout": "Stack → Grid",
+        "navigation": "Horizontal scroll → Drawer",
+        "tables": "Scroll → Card transform"
+      }
+    },
+    "accessibility": {
+      "wcag": "Level AA compliance",
+      "keyboard": "Full navigation, focus indicators",
+      "screenReader": "ARIA labels, live regions",
+      "contrast": "Min 4.5:1 for text",
+      "motion": "prefers-reduced-motion support"
+    }
+  },
+  "performance": {
+    "metrics": {
+      "lcp": "< 2.5s",
+      "fid": "< 100ms",
+      "cls": "< 0.1",
+      "bundleSize": "< 200KB gzipped"
+    },
+    "optimizations": [
+      "Code splitting por rota (React.lazy)",
+      "Tree shaking de bibliotecas (Lucide, Recharts)",
+      "Image optimization (lazy load, webp)",
+      "Virtual scrolling para listas grandes (>100 items)",
+      "Debounced search inputs (300ms)",
+      "Memoização: useMemo para dados processados, useCallback para callbacks",
+      "useTransition para updates não-bloqueantes",
+      "Web Workers para export Excel",
+      "Service Worker para offline (future)"
+    ],
+    "firebase": {
+      "persistence": "enableIndexedDbPersistence para offline",
+      "batching": "batch() para múltiplas operações",
+      "cursors": "useCursor para paginação eficiente",
+      "indexes": "Compound indexes no Firestore"
+    }
+  },
+  "testing": {
+    "strategy": "Pyramid: Unit (70%) → Integration (20%) → E2E (10%)",
+    "coverage": "> 80% para lógica de negócio",
+    "tools": {
+      "unit": ["Vitest", "React Testing Library"],
+      "e2e": ["Playwright ou Cypress"],
+      "coverage": ["Vitest coverage"]
+    },
+    "patterns": {
+      "components": "Render, fireEvent, await findBy*",
+      "hooks": "RenderHook from @testing-library/react-hooks",
+      "context": "Wrapper com Provider",
+      "mocks": "Jest.fn(), mockFirebase"
+    }
+  },
+  "security": {
+    "inputValidation": "Zod ou custom validators",
+    "sanitization": "DOMPurify para user content",
+    "xss": "React's default escaping",
+    "csrf": "Firebase handles automatically",
+    "storage": "No sensitive data in localStorage",
+    "api": "Firestore Rules + Auth guards"
+  },
+  "devExperience": {
+    "debugging": "React DevTools, Firebase Emulator",
+    "logging": "Console + Error Boundary",
+    "typing": "PropTypes ou TypeScript (recommended migration)",
+    "linting": "ESLint + Prettier",
+    "git": "Conventional Commits, branch protection"
+  },
+  "conventions": {
+    "naming": {
+      "components": "PascalCase (Dashboard.jsx)",
+      "hooks": "camelCase com prefix 'use' (useAuth)",
+      "utils": "camelCase (formatDate.js)",
+      "styles": "Same as component (Dashboard.module.css)",
+      "constants": "UPPER_SNAKE_CASE"
+    },
+    "structure": {
+      "components": "feature/ComponentName/index.jsx",
+      "hooks": "hooks/useHookName.js",
+      "utils": "utils/utilityName.js",
+      "services": "services/firebase.js"
+    },
+    "imports": {
+      "order": "React → External → Internal → Styles",
+      "relative": "Prefer absolute (@/) for internal"
+    },
+    "jsx": {
+      "selfClosing": "Only for no children",
+      "fragment": "Use <Fragment> or <>",
+      "conditions": "Ternary for simple, && for side effects"
+    },
+    "hooks": {
+      "custom": "use prefix, single responsibility",
+      "dependencies": "Complete arrays, eslint warnings",
+      "memo": "useMemo for expensive calculations"
+    }
+  },
+  "accessibility": {
+    "requirements": [
+      "All interactive elements keyboard accessible",
+      "Focus visible on all focusable elements",
+      "Alt text for all images",
+      "Form labels associated with inputs",
+      "Error messages announced to screen readers",
+      "Color contrast ratio 4.5:1 minimum",
+      "No content that flashes more than 3 times/second",
+      "Page titles descriptive and unique",
+      "Landmarks: header, main, footer, nav",
+      "Skip to main content link"
+    ],
+    "testing": "Axe-core, Lighthouse, NVDA/VoiceOver"
+  },
+  "bestPractices": {
+    "react": [
+      "Use functional components with hooks",
+      "Keep components small and focused",
+      "Extract logic into custom hooks",
+      "Colocate related code",
+      "Use composition over inheritance",
+      "Avoid prop drilling with Context (sparingly)"
+    ],
+    "state": [
+      "Lift state up when needed",
+      "Use useReducer for complex state",
+      "Keep state as close to usage as possible",
+      "Avoid storing derived data in state"
+    ],
+    "performance": [
+      "Profile before optimizing",
+      "Use React DevTools profiler",
+      "Memoize expensive calculations",
+      "Lazy load non-critical resources"
+    ],
+    "firebase": [
+      "Use real-time subscriptions sparingly",
+      "Implement proper error handling",
+      "Use Firestore indexes for complex queries",
+      "Batch writes when possible"
+    ]
+  },
+  "futureEnhancements": [
+    "TypeScript migration",
+    "PWA com service worker",
+    "Offline-first com sync",
+    "GraphQL API (apollo)",
+    "Unit tests com Jest",
+    "E2E tests com Playwright",
+    "CI/CD automation",
+    "SSR/SSG com Next.js"
+  ]
+}

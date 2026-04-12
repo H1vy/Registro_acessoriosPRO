@@ -1,5 +1,6 @@
 import { ref, get, set, child, remove, push, onValue } from "firebase/database";
-import { dbFB } from "./firebase";
+import { dbFB, secondaryAuth } from "./firebase";
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "firebase/auth";
 
 export const getAllData = async (storeName) => {
   try {
@@ -73,22 +74,53 @@ export const saveData = async (storeName, data) => {
 
 export const seedAdminUser = async () => {
   try {
-    const users = await getAllData('users');
-    const adminExists = users.find(u => u.id === 'admin-id');
-    
-    if (!adminExists) {
+    let authUid = null;
+
+    // 1. Garantir que o Firebase Auth tenha o admin criado e pegar o UID dele
+    try {
+      const userCred = await createUserWithEmailAndPassword(secondaryAuth, 'admin@acessoriospro.com', 'Admin123');
+      authUid = userCred.user.uid;
+      console.log('Firebase Auth: Usuário admin criado com sucesso.');
+    } catch (authErr) {
+      if (authErr.code === 'auth/email-already-in-use') {
+        // Se já existe, logar para pegar o UID correto
+        const userCred = await signInWithEmailAndPassword(secondaryAuth, 'admin@acessoriospro.com', 'Admin123');
+        authUid = userCred.user.uid;
+      } else {
+        console.error('Erro de autenticação ao processar admin:', authErr);
+        return;
+      }
+    }
+
+    // 2. Garantir que o banco de dados rastreie ESSE exato UID
+    let users = await getAllData('users');
+    const dbAdmin = users.find(u => u.id === authUid);
+
+    if (!dbAdmin) {
+      // Remover admins antigos locais (admin-id) se houver para evitar duplicidade
+      const legacyAdminIndex = users.findIndex(u => u.id === 'admin-id' || (u.role === 'admin' && !u.email));
+      if (legacyAdminIndex > -1) {
+        users.splice(legacyAdminIndex, 1);
+      }
+      
       const adminUser = {
-        id: 'admin-id',
+        id: authUid,
         username: 'Admin',
+        email: 'admin@acessoriospro.com',
         password: 'Admin123',
         role: 'admin'
       };
+      
       const newUsers = [...users, adminUser];
       await set(ref(dbFB, 'users'), newUsers);
-      console.log('Firebase: Usuário admin semeado com sucesso.');
+      console.log('Realtime DB: Sincronização do admin concluída.');
     } else {
-      console.log('Firebase: Admin já existe na base.');
+      console.log('Banco de dados e Auth do admin estão sincronizados.');
     }
+
+    // Limpar sessão secundária
+    await signOut(secondaryAuth);
+
   } catch (error) {
     console.error('Erro ao semear o Admin no Firebase:', error);
   }

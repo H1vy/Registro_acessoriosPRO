@@ -1,6 +1,7 @@
 // src/utils/firebase.js
 import { initializeApp } from "firebase/app";
 import { getDatabase } from "firebase/database";
+import { getAuth } from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCdqdaq7v4wocSVVVReTHqd_IUTrMN3c_c",
@@ -14,4 +15,8 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 export const dbFB = getDatabase(app);
+export const auth = getAuth(app);
 
+// App secundário para uso em rotinas de admin (criar usuário, trocar senha) sem deslogar o usuário principal
+export const secondaryApp = initializeApp(firebaseConfig, "Secondary");
+export const secondaryAuth = getAuth(secondaryApp);
