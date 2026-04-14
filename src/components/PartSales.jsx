@@ -121,16 +121,20 @@ export default function PartSales({ movements, setMovements, accessories, respon
                     </td>
                   </tr>
                 ) : (
-                  activeMovements.map(m => (
-                    <tr key={m.id}>
-                      <td style={{ fontSize: '0.85rem', whiteSpace: 'nowrap' }}>{formatDate(m.timestamp)}</td>
-                      <td style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{getAccessoryLabel(m.accessoryId)}</td>
-                      <td style={{ whiteSpace: 'nowrap' }}>{getResponsibleName(m.responsibleId)}</td>
-                      <td><code style={{ background: 'var(--bg-input)', padding: '2px 6px', borderRadius: '4px', whiteSpace: 'nowrap' }}>{m.soNumber || '-'}</code></td>
+                  activeMovements.map((m, index) => (
+                    <tr 
+                      key={m.id} 
+                      className="row-animate" 
+                      style={{ animationDelay: `${index * 50}ms` }}
+                    >
+                      <td style={{ fontSize: '0.85rem', whiteSpace: 'nowrap', fontWeight: 500 }}>{formatDate(m.timestamp)}</td>
+                      <td style={{ fontWeight: 600, whiteSpace: 'nowrap', color: 'var(--text-primary)' }}>{getAccessoryLabel(m.accessoryId)}</td>
+                      <td style={{ whiteSpace: 'nowrap', fontWeight: 600 }}>{getResponsibleName(m.responsibleId)}</td>
+                      <td><code style={{ background: 'var(--bg-input)', padding: '2px 8px', borderRadius: '4px', whiteSpace: 'nowrap', border: '1px solid var(--border)', fontSize: '0.8rem' }}>{m.soNumber || '-'}</code></td>
                       <td style={{ textAlign: 'center' }}>
                         <button 
                           className="btn-primary" 
-                          style={{ padding: '0.5rem 1rem', fontSize: '0.8rem' }}
+                          style={{ padding: '0.5rem 1rem', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
                           onClick={() => handleCheckin(m.id)}
                         >
                           <CheckCircle2 size={16} /> Check-in
@@ -190,12 +194,16 @@ export default function PartSales({ movements, setMovements, accessories, respon
                     </td>
                   </tr>
                 ) : (
-                  currentCheckedIn.map(m => (
-                    <tr key={m.id}>
-                      <td style={{ fontWeight: 500, fontSize: '0.85rem', whiteSpace: 'nowrap' }}>{getAccessoryLabel(m.accessoryId)}</td>
-                      <td style={{ fontSize: '0.85rem', whiteSpace: 'nowrap' }}>{formatDate(m.checkin.timestamp)}</td>
+                  currentCheckedIn.map((m, index) => (
+                    <tr 
+                      key={m.id} 
+                      className="row-animate row-checked-in" 
+                      style={{ animationDelay: `${index * 50}ms` }}
+                    >
+                      <td style={{ fontWeight: 500, fontSize: '0.85rem', whiteSpace: 'nowrap', color: 'var(--text-primary)' }}>{getAccessoryLabel(m.accessoryId)}</td>
+                      <td style={{ fontSize: '0.85rem', whiteSpace: 'nowrap', fontWeight: 500 }}>{formatDate(m.checkin.timestamp)}</td>
                       <td style={{ whiteSpace: 'nowrap' }}>
-                        <div className="badge-author" style={{ fontSize: '0.75rem' }}>
+                        <div className="badge badge-author">
                           <User size={12} /> {m.checkin.author}
                         </div>
                       </td>

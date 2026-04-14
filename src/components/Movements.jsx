@@ -346,34 +346,40 @@ export default function Movements({ movements, setMovements, accessories, respon
                   const mDate = new Date(m.timestamp).toISOString().split('T')[0]
                   return mDate === filterDate
                 })
-                .map(m => (
-                <tr key={m.id} className={`${m.annulled ? 'row-annulled' : ''} ${m.checkin ? 'row-checked-in' : ''}`}>
+                .map((m, index) => (
+                <tr 
+                  key={m.id} 
+                  className={`row-animate ${m.annulled ? 'row-annulled' : ''} ${m.checkin ? 'row-checked-in' : ''}`}
+                  style={{ animationDelay: `${index * 50}ms` }}
+                >
                   <td style={{ fontSize: '0.85rem', fontWeight: 500 }}>{formatDate(m.timestamp)}</td>
                   <td style={{ fontWeight: 500 }}>
-                    {getAccessoryLabel(m.accessoryId)}
+                    <div style={{ color: 'var(--text-primary)' }}>{getAccessoryLabel(m.accessoryId)}</div>
                     {m.annulled && !m.isReturn && (
-                      <div className="annulment-reason">
+                      <div className="record-detail-block annulment-reason">
                          <strong>Motivo Anulação:</strong> {m.reason}
                       </div>
                     )}
                     {m.isReturn && (
-                      <div className="return-details" style={{ fontSize: '0.75rem', marginTop: '4px', color: 'var(--success)' }}>
+                      <div className="record-detail-block return-details">
                          <strong>Retornado por:</strong> {m.returnInfo?.returnedBy} <br/>
                          <strong>Motivo:</strong> {m.returnInfo?.returnReason || 'Não especificado'} <br/>
-                         <strong>Data/Hora Retorno:</strong> {formatDate(m.returnInfo?.timestamp)} <br/>
-                         <strong>Recebido por:</strong> {m.returnInfo?.author}
+                         <span style={{ opacity: 0.7, fontSize: '0.75rem' }}>
+                           Recebido em {formatDate(m.returnInfo?.timestamp)} por {m.returnInfo?.author}
+                         </span>
                       </div>
                     )}
                     {m.checkin && (
-                      <div className="checkin-details" style={{ fontSize: '0.75rem', marginTop: '4px', color: 'var(--accent)' }}>
-                         <strong>Check-in realizado:</strong> {formatDate(m.checkin.timestamp)} por {m.checkin.author}
+                      <div className="record-detail-block checkin-details">
+                         <strong>Check-in realizado:</strong> <br/>
+                         <span style={{ opacity: 0.8 }}>{formatDate(m.checkin.timestamp)} por {m.checkin.author}</span>
                       </div>
                     )}
                   </td>
-                  <td>{getResponsibleName(m.responsibleId)}</td>
-                  <td><code style={{ background: 'var(--bg-input)', padding: '2px 6px', borderRadius: '4px', fontSize: '0.8rem' }}>{m.soNumber || '-'}</code></td>
+                  <td style={{ fontWeight: 600 }}>{getResponsibleName(m.responsibleId)}</td>
+                  <td><code style={{ background: 'var(--bg-input)', padding: '2px 8px', borderRadius: '4px', fontSize: '0.8rem', border: '1px solid var(--border)' }}>{m.soNumber || '-'}</code></td>
                   <td>
-                    <div className="badge-author" style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <div className="badge badge-author">
                       <User size={12} /> {m.author || 'Sistema'}
                     </div>
                   </td>
@@ -385,13 +391,13 @@ export default function Movements({ movements, setMovements, accessories, respon
                     )}
                   </td>
                   <td style={{ textAlign: 'center' }}>
-                    <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', gap: '0.8rem', justifyContent: 'center', alignItems: 'center' }}>
                       {!m.annulled ? (
                         <button 
                           onClick={() => handleAnnulleOpen(m.id)} 
                           className="btn-icon-danger"
                           title="Anular ou Registrar Retorno"
-                          style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', transition: 'transform 0.2s' }}
+                          style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', transition: 'transform 0.2s', display: 'flex', alignItems: 'center' }}
                         >
                           <Trash2 size={18} />
                         </button>
@@ -404,7 +410,7 @@ export default function Movements({ movements, setMovements, accessories, respon
                           onClick={() => handleRemoveClick(m.id)} 
                           className="btn-icon-danger"
                           title="Remover Registro do Histórico"
-                          style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', transition: 'transform 0.2s' }}
+                          style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', transition: 'transform 0.2s', display: 'flex', alignItems: 'center' }}
                         >
                           <XCircle size={18} />
                         </button>
