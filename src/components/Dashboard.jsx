@@ -118,7 +118,12 @@ export default function Dashboard({ movements, accessories, responsibles }) {
       data[key].movements.push({
         code: acc ? acc.factoryCode : 'Desconhecido',
         out: m.timestamp,
-        in: inDate
+        in: inDate,
+        isReturn: m.isReturn,
+        annulled: m.annulled,
+        isDeleted: m.isDeleted,
+        checkin: m.checkin,
+        reason: m.reason || m.returnInfo?.returnReason || m.deletionReason
       })
       data[key].count++
     })
@@ -396,25 +401,50 @@ export default function Dashboard({ movements, accessories, responsibles }) {
                 <span style={{ backgroundColor: 'var(--accent)', color: '#000', padding: '2px 8px', borderRadius: '12px', fontSize: '0.8rem' }}>Total: {activeResponsible.count}</span>
               </h4>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-                {[...activeResponsible.movements].sort((a, b) => new Date(b.out) - new Date(a.out)).map((mov, i) => (
-                  <div key={i} style={{ 
-                    fontSize: '0.8rem', 
-                    background: 'var(--bg-input)', 
-                    padding: '0.5rem', 
-                    borderRadius: '8px',
-                    borderLeft: mov.in ? '3px solid var(--success)' : '3px solid var(--accent)'
-                  }}>
-                    <strong style={{ color: 'var(--text-primary)', display: 'block', marginBottom: '4px' }}>{mov.code}</strong>
-                    <div style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', lineHeight: '1.4' }}>
-                      <div>Retirada: {new Date(mov.out).toLocaleString('pt-BR')}</div>
-                      {mov.in ? (
-                        <div style={{ color: '#6ee7b7' }}>Retorno: {new Date(mov.in).toLocaleString('pt-BR')}</div>
-                      ) : (
-                        <div style={{ color: '#fbbf24' }}>Pendente</div>
-                      )}
+                {[...activeResponsible.movements].sort((a, b) => new Date(b.out) - new Date(a.out)).map((mov, i) => {
+                  let statusLabel = 'Saída';
+                  let statusColor = 'var(--accent)';
+                  let borderStyle = '3px solid var(--accent)';
+                  
+                  if (mov.isDeleted) {
+                    statusLabel = 'Removido';
+                    statusColor = '#ef4444';
+                    borderStyle = '3px dashed #ef4444';
+                  } else if (mov.annulled && !mov.isReturn) {
+                    statusLabel = 'Anulado';
+                    statusColor = '#f87171';
+                    borderStyle = '3px solid #f87171';
+                  } else if (mov.isReturn || mov.checkin) {
+                    statusLabel = 'Finalizado';
+                    statusColor = '#10b981';
+                    borderStyle = '3px solid #10b981';
+                  }
+
+                  return (
+                    <div key={i} style={{ 
+                      fontSize: '0.8rem', 
+                      background: 'var(--bg-input)', 
+                      padding: '0.6rem 0.75rem', 
+                      borderRadius: '10px',
+                      borderLeft: borderStyle,
+                      marginBottom: '2px'
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                        <strong style={{ color: 'var(--text-primary)' }}>{mov.code}</strong>
+                        <span style={{ fontSize: '0.65rem', fontWeight: 800, color: statusColor, textTransform: 'uppercase' }}>{statusLabel}</span>
+                      </div>
+                      <div style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', lineHeight: '1.4' }}>
+                        <div>Retirada: {new Date(mov.out).toLocaleString('pt-BR')}</div>
+                        {mov.in && (
+                          <div style={{ color: mov.isReturn ? '#6ee7b7' : '#fbbf24' }}>
+                            {mov.isReturn ? 'Retorno' : 'Check-in'}: {new Date(mov.in).toLocaleString('pt-BR')}
+                          </div>
+                        )}
+                        {mov.reason && <div style={{ fontSize: '0.7rem', fontStyle: 'italic', marginTop: '2px', opacity: 0.8 }}>Motivo: {mov.reason}</div>}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
