@@ -1,53 +1,47 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Key, Eye, EyeOff, Save, Trash2, UserPlus, User, Mail, Check, Loader2 } from 'lucide-react';
-import { getAllData, addRecord, saveData } from '../utils/db';
-import { secondaryAuth } from '../utils/firebase';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, updatePassword, updateEmail, signOut } from 'firebase/auth';
+import { Shield, Key, Eye, EyeOff, Save, Trash2, UserPlus, User, Check, Loader2 } from 'lucide-react';
+import ConfirmModal from './ConfirmModal';
+import { getAllData, saveData } from '../utils/db';
 
 export default function AdminPanel({ currentUser, setMovements }) {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [visiblePasswords, setVisiblePasswords] = useState({});
   const [newPassword, setNewPassword] = useState({});
-  const [newEmail, setNewEmail] = useState({});
   const [savingRow, setSavingRow] = useState(null);
   const [successRow, setSuccessRow] = useState(null);
   const [message, setMessage] = useState('');
   
-  const [newUser, setNewUser] = useState({ username: '', email: '', password: '', role: 'user' });
+  const [newUser, setNewUser] = useState({ username: '', password: '', role: 'user' });
+  const [confirmModal, setConfirmModal] = useState({ isOpen: false });
 
   const handleClearHistory = async () => {
-    if (window.confirm('ATENÇÃO: Isso irá apagar TODO o histórico de movimentações permanentemente. Deseja continuar?')) {
-      try {
-        await saveData('movements', []);
-        if (setMovements) setMovements([]);
-        setMessage('Histórico limpo com sucesso!');
-        setTimeout(() => setMessage(''), 3000);
-      } catch (err) {
-        console.error(err);
-        setMessage('Erro ao limpar histórico.');
-      }
-    }
+    setConfirmModal({
+      isOpen: true,
+      title: 'Limpar Histórico',
+      message: 'ATENÇÃO: Isso irá apagar TODO o histórico de movimentações permanentemente. Deseja continuar?',
+      type: 'danger',
+      confirmText: 'Limpar Tudo',
+      onConfirm: async () => {
+        try {
+          await saveData('movements', []);
+          if (setMovements) setMovements([]);
+          setConfirmModal({ isOpen: false });
+          setMessage('Histórico limpo com sucesso!');
+          setTimeout(() => setMessage(''), 3000);
+        } catch (err) {
+          console.error(err);
+          setConfirmModal({ isOpen: false });
+          setMessage('Erro ao limpar histórico.');
+        }
+      },
+      onCancel: () => setConfirmModal({ isOpen: false })
+    });
   };
 
   const loadUsers = async () => {
     try {
       let data = await getAllData('users');
-      
-      // Auto-heal: Remover duplicações indesejadas do admin padrão (se existirem)
-      const admins = data.filter(u => u.email === 'admin@acessoriospro.com');
-      if (admins.length > 1 && currentUser?.id) {
-         const validAdminId = currentUser.id;
-         // Filtra para remover qualquer admin@... que não seja o da sessão auth validada
-         const filteredData = data.filter(u => !(u.email === 'admin@acessoriospro.com' && u.id !== validAdminId));
-         
-         if (filteredData.length < data.length) {
-            await saveData('users', filteredData);
-            data = filteredData;
-            console.log('Duplicidade de admin resolvida automaticamente.');
-         }
-      }
-      
       setUsers(data);
     } catch (err) {
       console.error(err);
@@ -68,15 +62,19 @@ export default function AdminPanel({ currentUser, setMovements }) {
     setNewPassword(prev => ({ ...prev, [userId]: value }));
   };
 
-  const handleEmailChange = (userId, value) => {
-    setNewEmail(prev => ({ ...prev, [userId]: value }));
-  };
-
   const saveModifications = async (userId) => {
     const passwordToSet = newPassword[userId];
-    const emailToSet = newEmail[userId];
-    if (!passwordToSet && (!emailToSet || emailToSet === users.find(u => u.id === userId)?.email)) return;
+    const usernameToSet = document.getElementById(`username-${userId}`)?.value;
+    const roleToSet = document.getElementById(`role-${userId}`)?.value;
     
+    if (!passwordToSet && (!usernameToSet || usernameToSet === users.find(u => u.id === userId)?.username) && (!roleToSet || roleToSet === users.find(u => u.id === userId)?.role)) return;
+    
+    // Default admin constraint check if needed, allowing it to continue here but could prevent demotion of current admin
+    if (userId === currentUser.id && roleToSet === 'user') {
+      alert('Você não pode remover seu próprio acesso de administrador.');
+      return;
+    }
+
     setSavingRow(userId);
     const dbUser = users.find(u => u.id === userId);
     if (!dbUser) {
@@ -85,32 +83,13 @@ export default function AdminPanel({ currentUser, setMovements }) {
     }
 
     try {
-      if (dbUser.email) {
-        const userCred = await signInWithEmailAndPassword(secondaryAuth, dbUser.email, dbUser.password);
-        
-        if (emailToSet && emailToSet !== dbUser.email) {
-           await updateEmail(userCred.user, emailToSet);
-        }
-        if (passwordToSet) {
-           await updatePassword(userCred.user, passwordToSet);
-        }
-        await signOut(secondaryAuth);
-      } else if (emailToSet) {
-        const pass = passwordToSet || dbUser.password;
-        if (!pass) {
-           setMessage('Usuário não possui senha preexistente. Crie uma senha junto.');
-           return;
-        }
-        await createUserWithEmailAndPassword(secondaryAuth, emailToSet, pass);
-        await signOut(secondaryAuth);
-      }
-
       const updatedUsers = users.map(u => {
         if (u.id === userId) {
           return { 
             ...u, 
             password: passwordToSet || u.password,
-            email: emailToSet || u.email
+            username: usernameToSet || u.username,
+            role: roleToSet || u.role
           };
         }
         return u;
@@ -124,11 +103,6 @@ export default function AdminPanel({ currentUser, setMovements }) {
         delete copy[userId];
         return copy;
       });
-      setNewEmail(prev => {
-        const copy = { ...prev };
-        delete copy[userId];
-        return copy;
-      });
       
       setSavingRow(null);
       setSuccessRow(userId);
@@ -138,9 +112,8 @@ export default function AdminPanel({ currentUser, setMovements }) {
       setTimeout(() => setMessage(''), 3000);
     } catch (err) {
       console.error(err);
-      setMessage('Erro crítico ao aplicar as modificações no Auth.');
+      setMessage('Erro crítico ao aplicar as modificações.');
       setSavingRow(null);
-      await signOut(secondaryAuth);
     }
   };
 
@@ -150,43 +123,43 @@ export default function AdminPanel({ currentUser, setMovements }) {
       return;
     }
     
-    if (window.confirm('Tem certeza de que deseja excluir este usuário definitivamente?')) {
-      const dbUser = users.find(u => u.id === userId);
-      try {
-        if (dbUser.email) {
-          const userCred = await signInWithEmailAndPassword(secondaryAuth, dbUser.email, dbUser.password);
-          await userCred.user.delete();
-          await signOut(secondaryAuth);
+    setConfirmModal({
+      isOpen: true,
+      title: 'Excluir Usuário',
+      message: 'Tem certeza de que deseja excluir este usuário definitivamente? Ele perderá o acesso.',
+      type: 'danger',
+      confirmText: 'Excluir',
+      onConfirm: async () => {
+        try {
+          const updatedUsers = users.filter(u => u.id !== userId);
+          await saveData('users', updatedUsers);
+          setUsers(updatedUsers);
+          setConfirmModal({ isOpen: false });
+          setMessage('Usuário excluído com sucesso do sistema.');
+          setTimeout(() => setMessage(''), 3000);
+        } catch (err) {
+          console.error(err);
+          setConfirmModal({ isOpen: false });
+          setMessage('Erro ao excluir usuário no Banco de Dados.');
         }
-
-        const updatedUsers = users.filter(u => u.id !== userId);
-        await saveData('users', updatedUsers);
-        setUsers(updatedUsers);
-        setMessage('Usuário excluído com sucesso do sistema.');
-        setTimeout(() => setMessage(''), 3000);
-      } catch (err) {
-        console.error(err);
-        setMessage('Erro ao excluir usuário no Firebase Auth.');
-        await signOut(secondaryAuth);
-      }
-    }
+      },
+      onCancel: () => setConfirmModal({ isOpen: false })
+    });
   };
 
   const handleCreateUser = async (e) => {
     e.preventDefault();
-    if (!newUser.username || !newUser.email || !newUser.password) {
+    if (!newUser.username || !newUser.password) {
       setMessage('Preencha os dados primários do usuário.');
       return;
     }
 
     try {
-      const userCred = await createUserWithEmailAndPassword(secondaryAuth, newUser.email, newUser.password);
-      await signOut(secondaryAuth);
+      const uid = Date.now().toString(36) + Math.random().toString(36).substring(2);
 
       const recordToAdd = {
-        id: userCred.user.uid,
+        id: uid,
         username: newUser.username,
-        email: newUser.email,
         password: newUser.password,
         role: newUser.role
       };
@@ -195,13 +168,12 @@ export default function AdminPanel({ currentUser, setMovements }) {
       await saveData('users', updatedUsers);
       setUsers(updatedUsers);
       
-      setNewUser({ username: '', email: '', password: '', role: 'user' });
+      setNewUser({ username: '', password: '', role: 'user' });
       setMessage('Conta criada com sucesso!');
       setTimeout(() => setMessage(''), 3000);
     } catch(err) {
       console.error(err);
-      setMessage('Erro ao criar conta Auth: ' + err.message);
-      await signOut(secondaryAuth);
+      setMessage('Erro ao criar conta no Banco de Dados: ' + err.message);
     }
   };
 
@@ -211,6 +183,15 @@ export default function AdminPanel({ currentUser, setMovements }) {
 
   return (
     <div className="tab-content" style={{ maxWidth: '100%', padding: '0 2rem', margin: '0 auto' }}>
+      <ConfirmModal 
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        type={confirmModal.type}
+        confirmText={confirmModal.confirmText}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={confirmModal.onCancel}
+      />
       <style>
         {`
           @keyframes spin-anim { 100% { transform: rotate(360deg); } }
@@ -236,7 +217,6 @@ export default function AdminPanel({ currentUser, setMovements }) {
         </div>
       )}
 
-      {/* NOVO: Formulário de Criação Integrado */}
       <div className="card" style={{ marginBottom: '2rem' }}>
         <h3><UserPlus size={18} style={{ verticalAlign: 'middle', marginRight: '6px' }}/> Novo Usuário</h3>
         <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
@@ -246,26 +226,14 @@ export default function AdminPanel({ currentUser, setMovements }) {
         <form onSubmit={handleCreateUser}>
           <div className="grid-2">
             <div className="input-group">
-              <label>Nome</label>
+              <label>Usuário</label>
               <div className="input-with-icon">
                 <User size={18} />
                 <input 
                   type="text" 
                   value={newUser.username}
                   onChange={e => setNewUser({...newUser, username: e.target.value})}
-                  placeholder="Ex: João"
-                />
-              </div>
-            </div>
-            <div className="input-group">
-              <label>E-mail (Para Login Auth)</label>
-              <div className="input-with-icon">
-                <Mail size={18} />
-                <input 
-                  type="email" 
-                  value={newUser.email}
-                  onChange={e => setNewUser({...newUser, email: e.target.value})}
-                  placeholder="joao@acessoriospro.com"
+                  placeholder="Ex: joao.silva"
                 />
               </div>
             </div>
@@ -281,17 +249,17 @@ export default function AdminPanel({ currentUser, setMovements }) {
                 />
               </div>
             </div>
-            <div className="input-group">
+            <div className="input-group" style={{ gridColumn: '1 / -1' }}>
               <label>Nível</label>
               <div className="input-with-icon">
                 <Shield size={18} />
                 <select 
-                  style={{ width: '100%', padding: '1rem 3.5rem 1rem 3rem', background: 'rgba(15, 23, 42, 0.6)', border: '1px solid rgba(148, 163, 184, 0.1)', borderRadius: '16px', color: '#f8fafc', fontSize: '0.95rem', appearance: 'none' }}
+                  style={{ appearance: 'none' }}
                   value={newUser.role}
                   onChange={e => setNewUser({...newUser, role: e.target.value})}
                 >
-                  <option value="user" style={{ background: '#1e293b' }}>Usuário</option>
-                  <option value="admin" style={{ background: '#1e293b' }}>Admin</option>
+                  <option value="user">Usuário</option>
+                  <option value="admin">Admin</option>
                 </select>
               </div>
             </div>
@@ -306,7 +274,7 @@ export default function AdminPanel({ currentUser, setMovements }) {
       <div className="card">
         <h3>Gerenciamento de Perfis e Senhas</h3>
         <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
-          Como administrador, você pode visualizar todos os usuários, ver suas senhas atuais e redefini-las caso necessário.
+          Como administrador, você pode visualizar todos os usuários, ver e redefinir suas informações caso necessário.
         </p>
 
         {loading ? (
@@ -317,7 +285,6 @@ export default function AdminPanel({ currentUser, setMovements }) {
               <thead>
                 <tr>
                   <th>Usuário</th>
-                  <th>E-mail</th>
                   <th>Permissão</th>
                   <th>Senha Atual</th>
                   <th>Nova Senha</th>
@@ -328,27 +295,31 @@ export default function AdminPanel({ currentUser, setMovements }) {
                 {users.map(u => (
                   <tr key={u.id}>
                     <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '500' }}>
-                        {u.username}
-                        {u.role === 'admin' && <Shield size={14} color="var(--accent)" title="Administrador Master" />}
-                      </div>
-                    </td>
-                    <td>
-                      <div className="input-with-icon" style={{ marginTop: 0, width: '220px' }}>
-                        <Mail size={16} />
+                      <div className="input-with-icon" style={{ marginTop: 0, width: '200px' }}>
+                        <User size={16} />
                         <input 
-                          type="email" 
-                          placeholder={u.email || 'Sem e-mail'} 
-                          value={newEmail[u.id] !== undefined ? newEmail[u.id] : (u.email || '')}
-                          onChange={(e) => handleEmailChange(u.id, e.target.value)}
-                          style={{ padding: '0.6rem 1rem 0.6rem 2.8rem', background: 'rgba(15, 23, 42, 0.4)', border: '1px solid rgba(148, 163, 184, 0.2)', borderRadius: '10px', width: '100%', color: 'var(--text-primary)' }}
+                          type="text" 
+                          id={`username-${u.id}`}
+                          defaultValue={u.username}
+                          style={{ padding: '0.6rem 1rem 0.6rem 2.8rem', borderRadius: '10px' }}
                         />
                       </div>
                     </td>
                     <td>
-                      <span className={`status-badge ${u.role === 'admin' ? 'completed' : 'pending'}`}>
-                        {u.role === 'admin' ? 'Admin' : 'Usuário'}
-                      </span>
+                      <div className="input-with-icon" style={{ marginTop: 0, width: '130px' }}>
+                        <Shield size={16} />
+                        <select 
+                          id={`role-${u.id}`}
+                          defaultValue={u.role}
+                          style={{ padding: '0.6rem 1rem 0.6rem 2.8rem', borderRadius: '10px', color: u.role === 'admin' ? '#c084fc' : 'var(--text-primary)', appearance: 'none', cursor: 'pointer', fontWeight: 600 }}
+                          onChange={(e) => {
+                             e.target.style.color = e.target.value === 'admin' ? '#c084fc' : 'var(--text-primary)';
+                          }}
+                        >
+                          <option value="user" className="custom-select-option">Usuário</option>
+                          <option value="admin" className="custom-select-option">Admin</option>
+                        </select>
+                      </div>
                     </td>
                     <td>
                       <div className="input-with-icon" style={{ marginTop: 0, width: '150px' }}>
@@ -357,7 +328,7 @@ export default function AdminPanel({ currentUser, setMovements }) {
                           type={visiblePasswords[u.id] ? "text" : "password"} 
                           value={u.password} 
                           readOnly 
-                          style={{ padding: '0.6rem 2.8rem 0.6rem 2.5rem', background: 'rgba(15, 23, 42, 0.3)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '10px', width: '100%', color: 'var(--text-secondary)' }}
+                          style={{ padding: '0.6rem 2.8rem 0.6rem 2.5rem', borderRadius: '10px' }}
                         />
                         <button 
                           type="button" 
@@ -378,7 +349,7 @@ export default function AdminPanel({ currentUser, setMovements }) {
                           placeholder="Nova senha..." 
                           value={newPassword[u.id] || ''}
                           onChange={(e) => handlePasswordChange(u.id, e.target.value)}
-                          style={{ padding: '0.6rem 1rem 0.6rem 2.8rem', background: 'rgba(15, 23, 42, 0.4)', border: '1px solid rgba(148, 163, 184, 0.2)', borderRadius: '10px', width: '100%' }}
+                          style={{ padding: '0.6rem 1rem 0.6rem 2.8rem', borderRadius: '10px' }}
                         />
                       </div>
                     </td>
@@ -387,15 +358,15 @@ export default function AdminPanel({ currentUser, setMovements }) {
                         <button 
                           className={`btn-icon-secondary ${successRow === u.id ? 'btn-success' : ''}`}
                           onClick={() => saveModifications(u.id)}
-                          disabled={savingRow === u.id || (!newPassword[u.id] && (!newEmail[u.id] || newEmail[u.id] === u.email))}
-                          title="Salvar alterações no Auth e DB"
+                          disabled={savingRow === u.id}
+                          title="Salvar alterações no BD"
                         >
                           {savingRow === u.id ? (
                              <Loader2 size={16} className="spin-icon" />
                           ) : successRow === u.id ? (
                              <Check size={16} />
                           ) : (
-                             <Save size={16} color={newPassword[u.id] || newEmail[u.id] ? 'var(--accent)' : 'currentColor'} />
+                             <Save size={16} color={'currentColor'} />
                           )}
                         </button>
                         {u.id !== currentUser?.id && (

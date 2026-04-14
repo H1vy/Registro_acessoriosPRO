@@ -1,12 +1,10 @@
 import React, { useState } from 'react';
-import { User, Lock, ArrowRight, Mail, Eye, EyeOff } from 'lucide-react';
+import { User, Lock, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { getAllData } from '../utils/db';
-import { auth } from '../utils/firebase';
-import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
 
 export default function Login({ onLogin }) {
   const [isAdminMode, setIsAdminMode] = useState(false);
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
@@ -39,40 +37,31 @@ export default function Login({ onLogin }) {
     e.preventDefault();
     setError('');
 
-    if (!email || !password) {
+    if (!username || !password) {
       setError('Por favor, preencha todos os campos.');
       return;
     }
 
     setLoading(true);
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password.trim());
-      const fbUser = userCredential.user;
-
       const users = await getAllData('users');
-      const dbUser = users.find(u => u.id === fbUser.uid || (fbUser.email && u.email === fbUser.email));
+      // Comparação não diferencia maiúsculas de minúsculas no usuário
+      const dbUser = users.find(u => u.username.toLowerCase() === username.trim().toLowerCase() && u.password === password);
       
       if (dbUser) {
         if (isAdminMode && dbUser.role !== 'admin') {
           setError('Esta conta não possui privilégios de administrador.');
-          await signOut(auth);
         } else if (!isAdminMode && dbUser.role === 'admin') {
           setError('Utilize a aba "Acesso Master" para entrar como administrador.');
-          await signOut(auth);
         } else {
           onLogin(dbUser);
         }
       } else {
-        setError('Registro de usuário não encontrado no banco de dados.');
-        await signOut(auth);
+        setError('Usuário ou senha inválidos.');
       }
     } catch (err) {
       console.error(err);
-      if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
-        setError('E-mail ou senha inválidos.');
-      } else {
-        setError('Erro na autenticação: ' + err.code);
-      }
+      setError('Erro na autenticação.');
     } finally {
       setLoading(false);
     }
@@ -116,14 +105,14 @@ export default function Login({ onLogin }) {
 
         <form onSubmit={handleSubmit} className="login-form">
           <div className="input-group">
-            <label>E-mail</label>
+            <label>Usuário</label>
             <div className="input-with-icon">
-              <Mail size={18} />
+              <User size={18} />
               <input 
-                type="email" 
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder={isAdminMode ? "admin@acessoriospro.com" : "seu@email.com"}
+                type="text" 
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder={isAdminMode ? "Admin" : "Seu usuário"}
                 disabled={loading}
               />
             </div>

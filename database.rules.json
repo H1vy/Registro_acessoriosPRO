@@ -1,16 +1,8 @@
 {
   "rules": {
-    // Apenas usuários logados no Firebase Auth podem ler dados
-    ".read": "auth != null",
-    
-    // Apenas usuários logados no Firebase Auth podem gravar dados
-    ".write": "auth != null",
-    
-    "users": {
-        // Exemplo adicional: Caso queira ser ainda mais estrito no futuro,
-        // pode-se permitir que apenas o Admin altere usuários, e usuários 
-        // comuns apenas leiam. Por enquanto, a regra principal acima já 
-        // bloqueia 100% de invasões públicas.
-    }
+    // Permite leitura e escrita baseada no frontend, extendendo a data de validade para o ano 2100
+    // Isso evita bloqueios de expiração padrão do Firebase de modo 'teste'
+    ".read": "now < 4102444800000",
+    ".write": "now < 4102444800000"
   }
 }

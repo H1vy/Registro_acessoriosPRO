@@ -8,10 +8,9 @@ import Catalog from './components/Catalog'
 import PartSales from './components/PartSales'
 import Login from './components/Login'
 import AdminPanel from './components/AdminPanel'
+import ConfirmModal from './components/ConfirmModal'
 import { getAllData, saveData, seedAdminUser, subscribeToData } from './utils/db'
-import { auth } from './utils/firebase'
-import { onAuthStateChanged, signOut } from 'firebase/auth'
-import { LogOut, User, Shield } from 'lucide-react'
+import { LogOut, User, Shield, Sun, Moon } from 'lucide-react'
 function App() {
   const [activeTab, setActiveTab] = useState('movements')
   const [accessories, setAccessories] = useState([])
@@ -19,6 +18,8 @@ function App() {
   const [movements, setMovements] = useState([])
   const [loading, setLoading] = useState(true)
   const [currentUser, setCurrentUser] = useState(null)
+  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark')
+  const [confirmModal, setConfirmModal] = useState({ isOpen: false })
   
   const fileInputRef = useRef(null)
 
@@ -26,31 +27,22 @@ function App() {
     // Semeia o admin se necessário
     seedAdminUser()
 
-    // Inicialmente carrega de localStorage para evitar piscar página, 
-    // mas o AuthStateChanged confirmará no servidor em seguida.
+    // Carrega o usuário da sessão para manter logado se houver (por ex, da localStorage)
     const savedUser = localStorage.getItem('currentUser')
     if (savedUser) {
-      setCurrentUser(JSON.parse(savedUser))
+      // Validar caso o user tenha sido apagado ou mudou a senha
+      // mas por performance e para evitar flash, assumimos inicialmente.
+      // Poderia ser feita uma verificação rápida no banco:
+      getAllData('users').then(users => {
+         const dbUser = users.find(u => u.id === JSON.parse(savedUser).id);
+         if (dbUser) {
+            setCurrentUser(dbUser);
+         } else {
+            setCurrentUser(null);
+            localStorage.removeItem('currentUser');
+         }
+      });
     }
-
-    const unsubscribeAuth = onAuthStateChanged(auth, async (fbUser) => {
-      if (fbUser) {
-        // Tenta obter o role
-        const users = await getAllData('users');
-        const dbUser = users.find(u => u.id === fbUser.uid || (fbUser.email && u.email === fbUser.email));
-        if (dbUser) {
-          setCurrentUser(dbUser);
-          localStorage.setItem('currentUser', JSON.stringify(dbUser));
-        } else {
-          setCurrentUser(null);
-          localStorage.removeItem('currentUser');
-          signOut(auth);
-        }
-      } else {
-        setCurrentUser(null);
-        localStorage.removeItem('currentUser');
-      }
-    });
 
     // Assinar mudanças do Firebase em tempo real
     const unsubAcc = subscribeToData('accessories', setAccessories);
@@ -84,12 +76,16 @@ function App() {
     checkMigrationAndLoad()
 
     return () => {
-      unsubscribeAuth();
       unsubAcc();
       unsubResp();
       unsubMov();
     }
   }, [])
+
+  useEffect(() => {
+    document.body.className = theme === 'dark' ? 'dark-mode' : 'light-mode'
+    localStorage.setItem('theme', theme)
+  }, [theme])
 
   const handleLogin = (user) => {
     setCurrentUser(user)
@@ -97,15 +93,23 @@ function App() {
   }
 
   const handleLogout = async () => {
-    if (window.confirm('Deseja realmente sair?')) {
-      try {
-        await signOut(auth);
-      } catch (err) {
-        console.error("Erro ao sair:", err);
-      }
-      setCurrentUser(null)
-      localStorage.removeItem('currentUser')
-    }
+    setConfirmModal({
+      isOpen: true,
+      title: 'Sair da conta',
+      message: 'Deseja realmente sair do seu perfil atual?',
+      type: 'warning',
+      confirmText: 'Sair',
+      onConfirm: () => {
+        setCurrentUser(null)
+        localStorage.removeItem('currentUser')
+        setConfirmModal({ isOpen: false })
+      },
+      onCancel: () => setConfirmModal({ isOpen: false })
+    })
+  }
+
+  const toggleTheme = () => {
+    setTheme(prev => prev === 'dark' ? 'light' : 'dark')
   }
 
   // Funções de atualização explícita para evitar loopings e race conditions do useEffect
@@ -147,12 +151,21 @@ function App() {
       try {
         const data = JSON.parse(event.target.result)
         if (data.accessories && data.responsibles && data.movements) {
-          if (window.confirm("Isso irá substituir todos os dados atuais. Deseja continuar?")) {
-            setAccessories(data.accessories)
-            setResponsibles(data.responsibles)
-            setMovements(data.movements)
-            alert("Backup restaurado com sucesso!")
-          }
+          setConfirmModal({
+            isOpen: true,
+            title: 'Restaurar Backup',
+            message: 'Isso irá substituir TODOS os dados atuais pelos do arquivo. Deseja continuar?',
+            type: 'danger',
+            confirmText: 'Restaurar',
+            onConfirm: () => {
+              setAccessories(data.accessories)
+              setResponsibles(data.responsibles)
+              setMovements(data.movements)
+              setConfirmModal({ isOpen: false })
+              setTimeout(() => alert("Backup restaurado com sucesso!"), 100)
+            },
+            onCancel: () => setConfirmModal({ isOpen: false })
+          })
         } else {
           alert("Arquivo de backup inválido.")
         }
@@ -161,6 +174,7 @@ function App() {
       }
     }
     reader.readAsText(file)
+    e.target.value = '' // reseta input para permitir mesmo arquivo de repetição
   }
 
   const handleRestoreClick = () => {
@@ -216,6 +230,15 @@ function App() {
 
   return (
     <div className="app-container">
+      <ConfirmModal 
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        type={confirmModal.type}
+        confirmText={confirmModal.confirmText}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={confirmModal.onCancel}
+      />
       <header>
         <div className="logo">
           <h1><span className="logo-text">ACESSÓRIOS</span> <span className="logo-pro">PRO</span></h1>
@@ -263,6 +286,11 @@ function App() {
           </div>
           
           <div className="header-actions">
+            <button className="btn-icon-secondary" title={theme === 'dark' ? 'Mudar para Tema Claro' : 'Mudar para Tema Escuro'} onClick={toggleTheme}>
+              {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+              <span>{theme === 'dark' ? 'Claro' : 'Escuro'}</span>
+            </button>
+
             <button className="btn-icon-secondary" title="Exportar Backup JSON" onClick={exportBackup}>
               <HardDriveDownload size={18} />
               <span>Backup</span>

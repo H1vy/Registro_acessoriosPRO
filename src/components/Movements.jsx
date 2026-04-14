@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
-import { ArrowUpRight, ArrowDownLeft, ClipboardCheck, Trash2, User, XCircle } from 'lucide-react'
+import { ArrowUpRight, ArrowDownLeft, ClipboardCheck, Trash2, User, XCircle, RotateCcw, X, Info } from 'lucide-react'
 import CustomSelect from './CustomSelect'
+import ConfirmModal from './ConfirmModal'
 
 export default function Movements({ movements, setMovements, accessories, responsibles, currentUser }) {
   const [formData, setFormData] = useState({
@@ -9,6 +10,15 @@ export default function Movements({ movements, setMovements, accessories, respon
     type: 'checkout',
     soNumber: ''
   })
+  const [modalState, setModalState] = useState({
+    isOpen: false,
+    movementId: null,
+    type: null,
+    returnedBy: '',
+    returnReason: '',
+    annulReason: ''
+  })
+  const [removeModal, setRemoveModal] = useState({ isOpen: false, movementId: null, reason: '' })
   const [filterDate, setFilterDate] = useState(new Date().toISOString().split('T')[0])
 
   const handleSubmit = (e) => {
@@ -31,38 +41,54 @@ export default function Movements({ movements, setMovements, accessories, respon
     setFormData({ ...formData, accessoryId: '', soNumber: '' })
   }
 
-  const handleAnnulle = (id) => {
-    const isReturn = window.confirm('Este registro é um RETORNO de produto?\n\nClique em OK para sim (Retorno) ou Cancelar para anulação simples.')
+  const handleAnnulleOpen = (id) => {
+    setModalState({ 
+      isOpen: true, 
+      movementId: id, 
+      type: null, 
+      returnedBy: '', 
+      returnReason: '', 
+      annulReason: '' 
+    })
+  }
+
+  const handleModalSubmit = () => {
+    const { movementId, type, returnedBy, returnReason, annulReason } = modalState
     
-    if (isReturn) {
-      const returnedBy = window.prompt('Quem está retornando o produto?')
-      if (returnedBy && returnedBy.trim()) {
-        const updatedMovements = movements.map(m => 
-          m.id === id ? { 
-            ...m, 
-            annulled: true, 
-            isReturn: true,
-            returnInfo: {
-              returnedBy: returnedBy.trim(),
-              timestamp: new Date().toISOString(),
-              author: currentUser?.username || 'Sistema'
-            }
-          } : m
-        )
-        setMovements(updatedMovements)
+    if (type === 'return') {
+      if (!returnedBy.trim() || !returnReason.trim()) {
+        alert('Por favor, preencha quem está retornando e o motivo.')
+        return
       }
-    } else {
-      const reason = window.prompt('Justifique o motivo da anulação deste registro:')
-      if (reason && reason.trim()) {
-        const updatedMovements = movements.map(m => 
-          m.id === id ? { ...m, annulled: true, isReturn: false, reason: reason.trim() } : m
-        )
-        setMovements(updatedMovements)
+      const updatedMovements = movements.map(m => 
+        m.id === movementId ? { 
+          ...m, 
+          annulled: true, 
+          isReturn: true,
+          returnInfo: {
+            returnedBy: returnedBy.trim(),
+            returnReason: returnReason.trim(),
+            timestamp: new Date().toISOString(),
+            author: currentUser?.username || 'Sistema'
+          }
+        } : m
+      )
+      setMovements(updatedMovements)
+      setModalState({ ...modalState, isOpen: false })
+    } else if (type === 'annul') {
+      if (!annulReason.trim()) {
+        alert('Por favor, justifique o motivo da anulação.')
+        return
       }
+      const updatedMovements = movements.map(m => 
+        m.id === movementId ? { ...m, annulled: true, isReturn: false, reason: annulReason.trim() } : m
+      )
+      setMovements(updatedMovements)
+      setModalState({ ...modalState, isOpen: false })
     }
   }
 
-  const handleRemove = (id) => {
+  const handleRemoveClick = (id) => {
     if (currentUser?.role !== 'admin') return
     
     const movement = movements.find(m => m.id === id)
@@ -71,19 +97,32 @@ export default function Movements({ movements, setMovements, accessories, respon
       return
     }
 
-    const reason = window.prompt('JUSTIFIQUE O MOTIVO DA REMOÇÃO:\n(Este registro será ocultado, mas constará no relatório Excel)')
-    if (reason && reason.trim()) {
-      const updatedMovements = movements.map(m => 
-        m.id === id ? { 
-          ...m, 
-          isDeleted: true, 
-          deletionReason: reason.trim(),
-          deletionTimestamp: new Date().toISOString(),
-          deletedBy: currentUser.username
-        } : m
-      )
-      setMovements(updatedMovements)
+    setRemoveModal({
+      isOpen: true,
+      movementId: id,
+      reason: ''
+    })
+  }
+
+  const handleConfirmRemove = () => {
+    const { movementId, reason } = removeModal
+    
+    if (!reason.trim()) {
+      alert('A justificativa é obrigatória para remover um registro.')
+      return
     }
+
+    const updatedMovements = movements.map(m => 
+      m.id === movementId ? { 
+        ...m, 
+        isDeleted: true, 
+        deletionReason: reason.trim(),
+        deletionTimestamp: new Date().toISOString(),
+        deletedBy: currentUser.username
+      } : m
+    )
+    setMovements(updatedMovements)
+    setRemoveModal({ isOpen: false, movementId: null, reason: '' })
   }
 
   const getAccessoryLabel = (id) => {
@@ -103,7 +142,113 @@ export default function Movements({ movements, setMovements, accessories, respon
   }
 
   return (
-    <div className="tab-content">
+    <div className="tab-content relative">
+      <ConfirmModal 
+        isOpen={removeModal.isOpen}
+        title="Remover Registro"
+        message="JUSTIFIQUE O MOTIVO DA REMOÇÃO: (Este registro será ocultado daqui, mas permanecerá no banco de dados e relatório Excel por segurança)"
+        type="danger"
+        confirmText="Remover"
+        showInput={true}
+        inputValue={removeModal.reason}
+        onInputChange={(val) => setRemoveModal({ ...removeModal, reason: val })}
+        inputPlaceholder="Ex: Registro duplicado, erro no sistema..."
+        onConfirm={handleConfirmRemove}
+        onCancel={() => setRemoveModal({ isOpen: false, movementId: null, reason: '' })}
+      />
+      {/* Modal Sobreposto */}
+      {modalState.isOpen && (
+        <div className="modal-backdrop">
+          <div className="modal-card">
+            <button className="modal-close-btn" onClick={() => setModalState({ ...modalState, isOpen: false })}>
+              <X size={24} />
+            </button>
+            <div className="modal-header">
+              <h3>Ação no Registro</h3>
+              <p>O que você deseja fazer com este registro de saída?</p>
+            </div>
+            
+            <div className="action-buttons-grid">
+              <button 
+                className={`action-card-btn ${modalState.type === 'return' ? 'active is-success' : ''}`}
+                onClick={() => setModalState({ ...modalState, type: 'return' })}
+                type="button"
+              >
+                <div style={{ background: modalState.type === 'return' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '50%', color: modalState.type === 'return' ? '#10b981' : '#94a3b8' }}>
+                  <RotateCcw size={28} />
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <span style={{ display: 'block', fontWeight: 700, fontSize: '1.05rem', marginBottom: '2px' }}>Retorno</span>
+                  <span style={{ fontSize: '0.75rem', color: '#94a3b8', opacity: 0.8 }}>Produto voltando ao estoque</span>
+                </div>
+              </button>
+
+              <button 
+                className={`action-card-btn ${modalState.type === 'annul' ? 'active is-danger' : ''}`}
+                onClick={() => setModalState({ ...modalState, type: 'annul' })}
+                type="button"
+              >
+                <div style={{ background: modalState.type === 'annul' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '50%', color: modalState.type === 'annul' ? '#ef4444' : '#94a3b8' }}>
+                  <XCircle size={28} />
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <span style={{ display: 'block', fontWeight: 700, fontSize: '1.05rem', marginBottom: '2px' }}>Anulação</span>
+                  <span style={{ fontSize: '0.75rem', color: '#94a3b8', opacity: 0.8 }}>Cancelar registro incorreto</span>
+                </div>
+              </button>
+            </div>
+
+            {modalState.type === 'return' && (
+              <div className="modal-form-area" style={{ animation: 'fadeIn 0.3s' }}>
+                <div className="input-group">
+                  <label>Quem está devolvendo?</label>
+                  <input 
+                    type="text" 
+                    placeholder="Nome do cliente/funcionário" 
+                    value={modalState.returnedBy}
+                    onChange={(e) => setModalState({ ...modalState, returnedBy: e.target.value })}
+                    autoFocus
+                  />
+                </div>
+                <div className="input-group">
+                  <label>Motivo do Retorno</label>
+                  <input 
+                    type="text" 
+                    placeholder="Ex: Produto com defeito, Cancelamento..." 
+                    value={modalState.returnReason}
+                    onChange={(e) => setModalState({ ...modalState, returnReason: e.target.value })}
+                  />
+                </div>
+              </div>
+            )}
+
+            {modalState.type === 'annul' && (
+              <div className="modal-form-area" style={{ animation: 'fadeIn 0.3s' }}>
+                <div className="input-group">
+                  <label>Justificativa da Anulação</label>
+                  <input 
+                    type="text" 
+                    placeholder="Ex: Lançado errado, equipamento duplicado..." 
+                    value={modalState.annulReason}
+                    onChange={(e) => setModalState({ ...modalState, annulReason: e.target.value })}
+                    autoFocus
+                  />
+                </div>
+              </div>
+            )}
+
+            <button 
+              className="btn-primary" 
+              style={{ width: '100%', marginTop: '1rem', opacity: !modalState.type ? 0.5 : 1 }}
+              onClick={handleModalSubmit}
+              disabled={!modalState.type}
+            >
+              Confirmar {modalState.type === 'return' ? 'Retorno' : modalState.type === 'annul' ? 'Anulação' : 'Ação'}
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="form-card card" style={{ marginBottom: '2rem' }}>
         <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem' }}>
           <ClipboardCheck className="accent" /> Registrar Saída de Acessório
@@ -214,6 +359,7 @@ export default function Movements({ movements, setMovements, accessories, respon
                     {m.isReturn && (
                       <div className="return-details" style={{ fontSize: '0.75rem', marginTop: '4px', color: 'var(--success)' }}>
                          <strong>Retornado por:</strong> {m.returnInfo?.returnedBy} <br/>
+                         <strong>Motivo:</strong> {m.returnInfo?.returnReason || 'Não especificado'} <br/>
                          <strong>Data/Hora Retorno:</strong> {formatDate(m.returnInfo?.timestamp)} <br/>
                          <strong>Recebido por:</strong> {m.returnInfo?.author}
                       </div>
@@ -242,7 +388,7 @@ export default function Movements({ movements, setMovements, accessories, respon
                     <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', alignItems: 'center' }}>
                       {!m.annulled ? (
                         <button 
-                          onClick={() => handleAnnulle(m.id)} 
+                          onClick={() => handleAnnulleOpen(m.id)} 
                           className="btn-icon-danger"
                           title="Anular ou Registrar Retorno"
                           style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', transition: 'transform 0.2s' }}
@@ -255,7 +401,7 @@ export default function Movements({ movements, setMovements, accessories, respon
 
                       {currentUser?.role === 'admin' && (
                         <button 
-                          onClick={() => handleRemove(m.id)} 
+                          onClick={() => handleRemoveClick(m.id)} 
                           className="btn-icon-danger"
                           title="Remover Registro do Histórico"
                           style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', transition: 'transform 0.2s' }}

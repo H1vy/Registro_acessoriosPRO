@@ -297,7 +297,7 @@ export default function Dashboard({ movements, accessories, responsibles }) {
                   <YAxis stroke="#64748b" axisLine={false} tickLine={false} tick={{ fontSize: 12, fontWeight: 500 }} />
                   <Tooltip 
                     contentStyle={{ 
-                      background: 'rgba(30, 41, 59, 0.8)', 
+                      background: 'var(--bg-card)', 
                       backdropFilter: 'blur(12px)',
                       WebkitBackdropFilter: 'blur(12px)',
                       border: '1px solid rgba(148, 163, 184, 0.2)',
@@ -377,17 +377,17 @@ export default function Dashboard({ movements, accessories, responsibles }) {
               left: '50%',
               transform: 'translate(-50%, -50%)',
               zIndex: 1000,
-              background: 'rgba(30, 41, 59, 0.95)',
+              background: 'var(--bg-card)',
               backdropFilter: 'blur(12px)',
               WebkitBackdropFilter: 'blur(12px)',
-              border: '1px solid rgba(148, 163, 184, 0.2)',
+              border: '1px solid var(--border)',
               borderRadius: '12px',
               boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.5)',
               padding: '1rem',
               width: '320px',
               maxHeight: '300px',
               overflowY: 'auto',
-              color: '#f8fafc',
+              color: 'var(--text-primary)',
             }}
             onClick={(e) => e.stopPropagation()}
             >
@@ -399,7 +399,7 @@ export default function Dashboard({ movements, accessories, responsibles }) {
                 {[...activeResponsible.movements].sort((a, b) => new Date(b.out) - new Date(a.out)).map((mov, i) => (
                   <div key={i} style={{ 
                     fontSize: '0.8rem', 
-                    background: 'rgba(15, 23, 42, 0.5)', 
+                    background: 'var(--bg-input)', 
                     padding: '0.5rem', 
                     borderRadius: '8px',
                     borderLeft: mov.in ? '3px solid var(--success)' : '3px solid var(--accent)'

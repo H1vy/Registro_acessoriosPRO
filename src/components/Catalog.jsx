@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { Plus, Trash2, User, Package, Users, ShieldCheck, UserPlus, Lock, Edit2, Check, X, ChevronLeft, ChevronRight, Search } from 'lucide-react'
+import ConfirmModal from './ConfirmModal'
 import { getAllData, addRecord, deleteRecord } from '../utils/db'
 
 export default function Catalog({ accessories, setAccessories, responsibles, setResponsibles, currentUser }) {
@@ -24,6 +25,7 @@ export default function Catalog({ accessories, setAccessories, responsibles, set
   const [dbUsers, setDbUsers] = useState([])
   const [newUser, setNewUser] = useState({ username: '', password: '', role: 'user' })
   const [showUserManagement, setShowUserManagement] = useState(false)
+  const [confirmModal, setConfirmModal] = useState({ isOpen: false })
 
   React.useEffect(() => {
     if (currentUser?.role === 'admin') {
@@ -58,10 +60,19 @@ export default function Catalog({ accessories, setAccessories, responsibles, set
       alert('Não é possível remover o administrador principal.')
       return
     }
-    if (window.confirm('Excluir este usuário permanentemente?')) {
-      await deleteRecord('users', id)
-      loadUsers()
-    }
+    setConfirmModal({
+      isOpen: true,
+      title: 'Excluir Usuário',
+      message: 'Tem certeza que deseja excluir este usuário permanentemente?',
+      type: 'danger',
+      confirmText: 'Excluir',
+      onConfirm: async () => {
+        await deleteRecord('users', id)
+        loadUsers()
+        setConfirmModal({ isOpen: false })
+      },
+      onCancel: () => setConfirmModal({ isOpen: false })
+    })
   }
 
   const addAccessory = (e) => {
@@ -135,7 +146,16 @@ export default function Catalog({ accessories, setAccessories, responsibles, set
   const paginatedResp = sortedResponsibles.slice((currentPageResp - 1) * itemsPerPageResp, currentPageResp * itemsPerPageResp)
 
   return (
-    <div className="tab-content">
+    <div className="tab-content relative">
+      <ConfirmModal 
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        type={confirmModal.type}
+        confirmText={confirmModal.confirmText}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={confirmModal.onCancel}
+      />
       <div className="grid" style={{ gridTemplateColumns: currentUser?.role === 'admin' ? '1fr 1fr 1fr' : '1fr 1fr' }}>
         <div className="card">
           <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem' }}>
