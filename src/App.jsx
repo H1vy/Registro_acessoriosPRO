@@ -20,6 +20,8 @@ function App() {
   const [currentUser, setCurrentUser] = useState(null)
   const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark')
   const [confirmModal, setConfirmModal] = useState({ isOpen: false })
+  const [alertConfig, setAlertConfig] = useState({ isOpen: false, title: '', message: '', type: 'warning' })
+  const [users, setUsers] = useState([])
   
   const fileInputRef = useRef(null)
 
@@ -48,6 +50,7 @@ function App() {
     const unsubAcc = subscribeToData('accessories', setAccessories);
     const unsubResp = subscribeToData('responsibles', setResponsibles);
     const unsubMov = subscribeToData('movements', setMovements);
+    const unsubUsers = subscribeToData('users', setUsers);
 
     const checkMigrationAndLoad = async () => {
       try {
@@ -79,6 +82,7 @@ function App() {
       unsubAcc();
       unsubResp();
       unsubMov();
+      unsubUsers();
     }
   }, [])
 
@@ -112,6 +116,10 @@ function App() {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark')
   }
 
+  const showAlert = (title, message, type = 'warning') => {
+    setAlertConfig({ isOpen: true, title, message, type });
+  };
+
   // Funções de atualização explícita para evitar loopings e race conditions do useEffect
   const handleSetAccessories = (newData) => {
     const resolved = typeof newData === 'function' ? newData(accessories) : newData;
@@ -129,6 +137,12 @@ function App() {
     const resolved = typeof newData === 'function' ? newData(movements) : newData;
     setMovements(resolved);
     saveData('movements', resolved);
+  };
+
+  const handleSetUsers = (newData) => {
+    const resolved = typeof newData === 'function' ? newData(users) : newData;
+    setUsers(resolved);
+    saveData('users', resolved);
   };
 
   const exportBackup = () => {
@@ -161,16 +175,17 @@ function App() {
               setAccessories(data.accessories)
               setResponsibles(data.responsibles)
               setMovements(data.movements)
+              if (data.users) setUsers(data.users)
               setConfirmModal({ isOpen: false })
-              setTimeout(() => alert("Backup restaurado com sucesso!"), 100)
+              setTimeout(() => showAlert("Sucesso", "Backup restaurado com sucesso!", "success"), 100)
             },
             onCancel: () => setConfirmModal({ isOpen: false })
           })
         } else {
-          alert("Arquivo de backup inválido.")
+          showAlert("Erro", "Arquivo de backup inválido.", "danger")
         }
       } catch (err) {
-        alert("Erro ao ler o arquivo de backup.")
+        showAlert("Erro", "Erro ao ler o arquivo de backup.", "danger")
       }
     }
     reader.readAsText(file)
@@ -195,6 +210,7 @@ function App() {
             responsibles={responsibles} 
             setMovements={handleSetMovements}
             currentUser={currentUser}
+            showAlert={showAlert}
           />
         )
       case 'catalog':
@@ -205,6 +221,7 @@ function App() {
             responsibles={responsibles}
             setResponsibles={handleSetResponsibles}
             currentUser={currentUser}
+            showAlert={showAlert}
           />
         )
       case 'part-sales':
@@ -215,10 +232,11 @@ function App() {
             responsibles={responsibles} 
             setMovements={handleSetMovements}
             currentUser={currentUser}
+            showAlert={showAlert}
           />
         )
       case 'admin':
-        return <AdminPanel currentUser={currentUser} setMovements={handleSetMovements} />
+        return <AdminPanel currentUser={currentUser} users={users} setUsers={handleSetUsers} setMovements={handleSetMovements} showAlert={showAlert} />
       default:
         return <Movements currentUser={currentUser} />
     }
@@ -238,6 +256,17 @@ function App() {
         confirmText={confirmModal.confirmText}
         onConfirm={confirmModal.onConfirm}
         onCancel={confirmModal.onCancel}
+      />
+      
+      <ConfirmModal 
+        isOpen={alertConfig.isOpen}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        type={alertConfig.type}
+        hideCancel={true}
+        confirmText="Entendido"
+        onConfirm={() => setAlertConfig({ ...alertConfig, isOpen: false })}
+        onCancel={() => setAlertConfig({ ...alertConfig, isOpen: false })}
       />
       <header>
         <div className="logo">

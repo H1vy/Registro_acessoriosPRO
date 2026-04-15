@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
-import { Download, TrendingUp, Users, Package, Calendar } from 'lucide-react'
+import { Download, TrendingUp, Users, Package, Calendar, X } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
 export default function Dashboard({ movements, accessories, responsibles }) {
@@ -21,11 +21,17 @@ export default function Dashboard({ movements, accessories, responsibles }) {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  // Limpar responsável ativo se os movimentos forem resetados (ex: Limpar Histórico)
+  useEffect(() => {
+    if (movements.length === 0) setActiveResponsible(null)
+  }, [movements])
+
   const filterMovements = (movs) => {
     const now = new Date()
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
     
     return movs.filter(m => {
+      if (m.isDeleted) return false // Ignorar registros removidos logicamente
       const mDate = new Date(m.timestamp)
       
       // Se houver datas personalizadas, elas têm precedência
@@ -84,6 +90,7 @@ export default function Dashboard({ movements, accessories, responsibles }) {
   const processAccessoryData = () => {
     const data = {}
     filteredMovements.forEach(m => {
+      if (m.isDeleted) return // Segurança extra
       const acc = accessories.find(a => a.id === m.accessoryId)
       if (!acc) return
       const key = acc.factoryCode
@@ -128,6 +135,32 @@ export default function Dashboard({ movements, accessories, responsibles }) {
       data[key].count++
     })
     return Object.values(data).sort((a, b) => b.count - a.count)
+  }
+
+  // Obter movimentos específicos do responsável ativo em tempo real
+  const getActiveResponsibleMovements = () => {
+    if (!activeResponsible) return []
+    return filteredMovements
+      .filter(m => {
+        const resp = responsibles.find(r => r.id === m.responsibleId)
+        return resp && resp.name === activeResponsible.name
+      })
+      .map(m => {
+        const acc = accessories.find(a => a.id === m.accessoryId)
+        let inDate = null;
+        if (m.isReturn && m.returnInfo) inDate = m.returnInfo.timestamp;
+        else if (m.checkin) inDate = m.checkin.timestamp;
+
+        return {
+          code: acc ? acc.factoryCode : 'Desconhecido',
+          out: m.timestamp,
+          in: inDate,
+          isReturn: m.isReturn,
+          annulled: m.annulled,
+          checkin: m.checkin,
+          reason: m.reason || m.returnInfo?.returnReason || m.deletionReason
+        }
+      })
   }
 
   const processDailyTrendData = () => {
@@ -192,13 +225,13 @@ export default function Dashboard({ movements, accessories, responsibles }) {
   const COLORS = ['#38bdf8', '#10b981', '#fbbf24', '#f87171', '#a78bfa']
 
   return (
-    <div className="tab-content">
-      <div className="action-bar" style={{ flexWrap: 'wrap', gap: '1.5rem' }}>
+    <div className="tab-content dashboard-container">
+      <div className="action-bar" style={{ flexWrap: 'wrap', gap: '1.25rem' }}>
         <h2>Dashboard de Métricas</h2>
         
-        <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+        <div className="dashboard-filters" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
           {/* Calendário Fixo */}
-          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', background: 'var(--bg-card)', padding: '0.5rem 1rem', borderRadius: '12px', border: '1px solid var(--border)' }}>
+          <div className="filter-group" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', background: 'var(--bg-card)', padding: '0.5rem 1rem', borderRadius: '12px', border: '1px solid var(--border)', flex: '1 1 auto', justifyContent: 'center' }}>
             <Calendar size={18} style={{ color: 'var(--accent)' }} />
             <input 
               type="date" 
@@ -206,7 +239,7 @@ export default function Dashboard({ movements, accessories, responsibles }) {
               onChange={(e) => handleDateChange('start', e.target.value)}
               style={{ 
                 background: 'var(--bg-input)', border: '1px solid var(--border)', color: 'var(--text-primary)',
-                padding: '0.35rem 0.5rem', borderRadius: '6px', fontSize: '0.85rem'
+                padding: '0.35rem 0.5rem', borderRadius: '6px', fontSize: '0.85rem', width: 'auto'
               }}
             />
             <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>até</span>
@@ -216,17 +249,17 @@ export default function Dashboard({ movements, accessories, responsibles }) {
               onChange={(e) => handleDateChange('end', e.target.value)}
               style={{ 
                 background: 'var(--bg-input)', border: '1px solid var(--border)', color: 'var(--text-primary)',
-                padding: '0.35rem 0.5rem', borderRadius: '6px', fontSize: '0.85rem'
+                padding: '0.35rem 0.5rem', borderRadius: '6px', fontSize: '0.85rem', width: 'auto'
               }}
             />
           </div>
 
           {/* Filtros de Período (Botões) */}
-          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', background: 'var(--bg-card)', padding: '0.25rem', borderRadius: '12px', border: '1px solid var(--border)' }}>
+          <div className="filter-group" style={{ display: 'flex', gap: '0.25rem', alignItems: 'center', background: 'var(--bg-card)', padding: '0.25rem', borderRadius: '12px', border: '1px solid var(--border)', flex: '1 1 auto', justifyContent: 'center' }}>
             {[
               { id: 'all', label: 'Tudo' },
               { id: 'day', label: 'Dia' },
-              { id: 'week', label: 'Semana' },
+              { id: 'week', label: 'Sem' },
               { id: 'month', label: 'Mês' },
               { id: 'year', label: 'Ano' }
             ].map(f => (
@@ -234,7 +267,7 @@ export default function Dashboard({ movements, accessories, responsibles }) {
                 key={f.id}
                 onClick={() => handleQuickFilter(f.id)}
                 className={`nav-btn ${quickFilter === f.id ? 'active' : ''}`}
-                style={{ padding: '0.35rem 0.75rem', fontSize: '0.85rem' }}
+                style={{ padding: '0.35rem 0.6rem', fontSize: '0.8rem', minWidth: '45px' }}
               >
                 {f.label}
               </button>
@@ -242,8 +275,8 @@ export default function Dashboard({ movements, accessories, responsibles }) {
           </div>
         </div>
 
-        <button className="btn-primary" onClick={exportToExcel}>
-          <Download size={18} /> Exportar
+        <button className="btn-primary" onClick={exportToExcel} style={{ flex: '1 1 100%' }}>
+          <Download size={18} /> Exportar Relatório Excel
         </button>
       </div>
 
@@ -294,8 +327,8 @@ export default function Dashboard({ movements, accessories, responsibles }) {
             </div>
           </div>
           <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
-            <div style={{ flex: '1 1 500px', height: '350px' }}>
-              <ResponsiveContainer width="100%" height="100%">
+            <div className="chart-wrapper" style={{ flex: '1 1 100%', minHeight: '300px', height: 'auto', maxHeight: '400px' }}>
+              <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={dailyTrendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.1)" vertical={false} />
                   <XAxis dataKey="date" stroke="#64748b" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 500 }} dy={10} />
@@ -307,7 +340,8 @@ export default function Dashboard({ movements, accessories, responsibles }) {
                       WebkitBackdropFilter: 'blur(12px)',
                       border: '1px solid rgba(148, 163, 184, 0.2)',
                       borderRadius: '12px',
-                      boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3)'
+                      boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3)',
+                      zIndex: 1000
                     }}
                     itemStyle={{ fontSize: '0.85rem', fontWeight: 600 }}
                     cursor={{ fill: 'rgba(148, 163, 184, 0.05)' }}
@@ -349,107 +383,158 @@ export default function Dashboard({ movements, accessories, responsibles }) {
           </div>
         </div>
 
-        <div className="card" style={{ height: '400px', position: 'relative' }} ref={chartRef}>
-          <h3>Participação por Responsável</h3>
-          <ResponsiveContainer width="100%" height="90%">
-            <PieChart onClick={(e) => { if (!e) setActiveResponsible(null) }}>
-              <Pie
-                data={respData}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                outerRadius={100}
-                fill="#8884d8"
-                dataKey="count"
-                label={({ name }) => name}
-                onClick={(data, index, e) => {
-                  if (e) e.stopPropagation();
-                  setActiveResponsible(data.payload);
-                }}
-                style={{ cursor: 'pointer' }}
-              >
-                {respData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                ))}
-              </Pie>
-            </PieChart>
-          </ResponsiveContainer>
+        <div className="card" style={{ height: '420px', position: 'relative', display: 'flex', flexDirection: 'column' }} ref={chartRef}>
+          <h3 style={{ marginBottom: '1rem' }}>Participação por Responsável</h3>
+          <div style={{ flex: 1, position: 'relative' }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart onClick={(e) => { if (!e) setActiveResponsible(null) }}>
+                <Pie
+                  data={respData}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  innerRadius={75}
+                  outerRadius={105}
+                  paddingAngle={5}
+                  dataKey="count"
+                  onClick={(data, index, e) => {
+                    if (e) e.stopPropagation();
+                    setActiveResponsible(data.payload);
+                  }}
+                  style={{ cursor: 'pointer', outline: 'none' }}
+                >
+                  {respData.map((entry, index) => (
+                    <Cell 
+                      key={`cell-${index}`} 
+                      fill={COLORS[index % COLORS.length]} 
+                      stroke="none"
+                      style={{ filter: 'drop-shadow(0px 4px 6px rgba(0,0,0,0.2))' }}
+                    />
+                  ))}
+                </Pie>
+                <text x="50%" y="48%" className="donut-center-text" style={{ fontSize: '2rem' }}>
+                  {filteredMovements.length}
+                </text>
+                <text x="50%" y="58%" className="donut-center-text" style={{ fontSize: '0.75rem', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '1px' }}>
+                  Total Geral
+                </text>
+                <Tooltip 
+                  contentStyle={{ 
+                    background: 'var(--bg-card)', 
+                    backdropFilter: 'blur(12px)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '12px',
+                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3)'
+                  }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
 
-          {activeResponsible && (
-            <div className="custom-scrollbar" style={{
-              position: 'absolute',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              zIndex: 1000,
-              background: 'var(--bg-card)',
-              backdropFilter: 'blur(12px)',
-              WebkitBackdropFilter: 'blur(12px)',
-              border: '1px solid var(--border)',
-              borderRadius: '12px',
-              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.5)',
-              padding: '1rem',
-              width: '320px',
-              maxHeight: '300px',
-              overflowY: 'auto',
-              color: 'var(--text-primary)',
-            }}
-            onClick={(e) => e.stopPropagation()}
-            >
-              <h4 style={{ margin: '0 0 0.8rem 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span>{activeResponsible.name}</span>
-                <span style={{ backgroundColor: 'var(--accent)', color: '#000', padding: '2px 8px', borderRadius: '12px', fontSize: '0.8rem' }}>Total: {activeResponsible.count}</span>
-              </h4>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-                {[...activeResponsible.movements].sort((a, b) => new Date(b.out) - new Date(a.out)).map((mov, i) => {
-                  let statusLabel = 'Saída';
-                  let statusColor = 'var(--accent)';
-                  let borderStyle = '3px solid var(--accent)';
-                  
-                  if (mov.isDeleted) {
-                    statusLabel = 'Removido';
-                    statusColor = '#ef4444';
-                    borderStyle = '3px dashed #ef4444';
-                  } else if (mov.annulled && !mov.isReturn) {
-                    statusLabel = 'Anulado';
-                    statusColor = '#f87171';
-                    borderStyle = '3px solid #f87171';
-                  } else if (mov.isReturn || mov.checkin) {
-                    statusLabel = 'Finalizado';
-                    statusColor = '#10b981';
-                    borderStyle = '3px solid #10b981';
-                  }
-
-                  return (
-                    <div key={i} style={{ 
-                      fontSize: '0.8rem', 
-                      background: 'var(--bg-input)', 
-                      padding: '0.6rem 0.75rem', 
-                      borderRadius: '10px',
-                      borderLeft: borderStyle,
-                      marginBottom: '2px'
-                    }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                        <strong style={{ color: 'var(--text-primary)' }}>{mov.code}</strong>
-                        <span style={{ fontSize: '0.65rem', fontWeight: 800, color: statusColor, textTransform: 'uppercase' }}>{statusLabel}</span>
-                      </div>
-                      <div style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', lineHeight: '1.4' }}>
-                        <div>Retirada: {new Date(mov.out).toLocaleString('pt-BR')}</div>
-                        {mov.in && (
-                          <div style={{ color: mov.isReturn ? '#6ee7b7' : '#fbbf24' }}>
-                            {mov.isReturn ? 'Retorno' : 'Check-in'}: {new Date(mov.in).toLocaleString('pt-BR')}
-                          </div>
-                        )}
-                        {mov.reason && <div style={{ fontSize: '0.7rem', fontStyle: 'italic', marginTop: '2px', opacity: 0.8 }}>Motivo: {mov.reason}</div>}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+          
         </div>
       </div>
+
+      {/* Overlay de Histórico do Responsável */}
+      {activeResponsible && (
+        <>
+          <div 
+            className="modal-backdrop" 
+            style={{ display: 'block', zIndex: 9999 }} 
+            onClick={() => setActiveResponsible(null)}
+          />
+          <div className="custom-scrollbar active-responsible-overlay" style={{
+            position: 'fixed',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            zIndex: 10000,
+            background: 'var(--bg-card)',
+            backdropFilter: 'blur(25px)',
+            WebkitBackdropFilter: 'blur(25px)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            borderRadius: '28px',
+            boxShadow: '0 40px 80px -15px rgba(0, 0, 0, 0.9), inset 0 0 0 1px rgba(255, 255, 255, 0.05)',
+            padding: '2rem',
+            width: '92%',
+            maxWidth: '450px',
+            maxHeight: '85vh',
+            overflowY: 'auto',
+            color: 'var(--text-primary)',
+          }}
+          onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid var(--border)', paddingBottom: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{ background: 'var(--accent)', color: '#000', width: '40px', height: '40px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '1.2rem' }}>
+                  {activeResponsible.name.charAt(0)}
+                </div>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800 }}>{activeResponsible.name}</h4>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', opacity: 0.8 }}>Relatório de Movimentações</span>
+                </div>
+              </div>
+              <button 
+                onClick={() => setActiveResponsible(null)}
+                style={{ background: 'rgba(255,255,255,0.05)', border: 'none', color: 'var(--text-primary)', width: '32px', height: '32px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255,255,255,0.03)', padding: '0.75rem 1rem', borderRadius: '12px', marginBottom: '1.5rem' }}>
+              <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Total Realizado</span>
+              <span style={{ backgroundColor: 'var(--accent)', color: '#000', padding: '4px 12px', borderRadius: '20px', fontSize: '0.9rem', fontWeight: 800 }}>{activeResponsible.count}</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+              {getActiveResponsibleMovements().slice().sort((a, b) => new Date(b.out) - new Date(a.out)).map((mov, i) => {
+                let statusLabel = 'Saída';
+                let statusColor = 'var(--accent)';
+                let borderStyle = '3px solid var(--accent)';
+                
+                if (mov.isDeleted) {
+                  statusLabel = 'Removido';
+                  statusColor = '#ef4444';
+                  borderStyle = '3px dashed #ef4444';
+                } else if (mov.annulled && !mov.isReturn) {
+                  statusLabel = 'Anulado';
+                  statusColor = '#f87171';
+                  borderStyle = '3px solid #f87171';
+                } else if (mov.isReturn || mov.checkin) {
+                  statusLabel = 'Finalizado';
+                  statusColor = '#10b981';
+                  borderStyle = '3px solid #10b981';
+                }
+
+                return (
+                  <div key={i} style={{ 
+                    fontSize: '0.8rem', 
+                    background: 'var(--bg-input)', 
+                    padding: '0.6rem 0.75rem', 
+                    borderRadius: '10px',
+                    borderLeft: borderStyle,
+                    marginBottom: '2px'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                      <strong style={{ color: 'var(--text-primary)' }}>{mov.code}</strong>
+                      <span style={{ fontSize: '0.65rem', fontWeight: 800, color: statusColor, textTransform: 'uppercase' }}>{statusLabel}</span>
+                    </div>
+                    <div style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', lineHeight: '1.4' }}>
+                      <div>Retirada: {new Date(mov.out).toLocaleString('pt-BR')}</div>
+                      {mov.in && (
+                        <div style={{ color: mov.isReturn ? '#6ee7b7' : '#fbbf24' }}>
+                          {mov.isReturn ? 'Retorno' : 'Check-in'}: {new Date(mov.in).toLocaleString('pt-BR')}
+                        </div>
+                      )}
+                      {mov.reason && <div style={{ fontSize: '0.7rem', fontStyle: 'italic', marginTop: '2px', opacity: 0.8 }}>Motivo: {mov.reason}</div>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }

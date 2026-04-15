@@ -11,6 +11,45 @@
   /* Compartilhados */
   --success: #10b981;
   --danger: #ef4444;
+  
+  /* Responsive Scales */
+  --container-padding: 2rem;
+  --card-padding: 2.25rem;
+  --header-margin: 4.5rem;
+}
+
+@media (max-width: 768px) {
+  :root {
+    --container-padding: 1rem;
+    --card-padding: 1.5rem;
+    --header-margin: 2.5rem;
+  }
+}
+
+@media (max-width: 640px) {
+  :root {
+    --container-padding: 1rem;
+    --card-padding: 1.25rem;
+  }
+
+  .nav-btn, .btn-primary, .btn-icon-secondary, .btn-icon-danger {
+    min-height: var(--touch-target);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .password-toggle {
+    width: var(--touch-target);
+    height: var(--touch-target);
+  }
+
+  .responsive-table td {
+    padding: 1rem !important;
+  }
+}
+
+@media (max-width: 480px) {
 }
 
 /* Modo Escuro (Padrão) */
@@ -107,7 +146,7 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-  padding: 2rem;
+  padding: var(--container-padding);
   max-width: 1400px;
   margin: 0 auto;
 }
@@ -1372,6 +1411,112 @@ body.dark-mode .login-overlay.admin .input-with-icon > svg {
 }
 
 /* --- ACTION MODAL --- */
+/* --- MOBILE TABLE CARDS --- */
+@media (max-width: 640px) {
+  .responsive-table, .responsive-table thead, .responsive-table tbody, .responsive-table th, .responsive-table td, .responsive-table tr { 
+    display: block; 
+  }
+  
+  .responsive-table thead tr { 
+    position: absolute;
+    top: -9999px;
+    left: -9999px;
+  }
+  
+  .responsive-table tr {
+    margin-bottom: 1rem;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    background: var(--bg-card);
+  }
+  
+  .responsive-table td { 
+    border: none;
+    border-bottom: 1px solid var(--border); 
+    position: relative;
+    padding-left: 50% !important; 
+    text-align: right;
+    min-height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+  }
+  
+  .responsive-table td:last-child {
+    border-bottom: none;
+  }
+  
+  .responsive-table td:before { 
+    position: absolute;
+    top: 50%;
+    left: 1.5rem;
+    width: 45%; 
+    padding-right: 10px; 
+    white-space: nowrap;
+    text-align: left;
+    font-weight: 700;
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    transform: translateY(-50%);
+    content: attr(data-label);
+  }
+
+  /* Catalog Table Specific Labels */
+  .catalog-table td:nth-of-type(1):before { content: "Código"; }
+  .catalog-table td:nth-of-type(2):before { content: "Nome Comercial"; }
+  .catalog-table td:nth-of-type(3):before { content: "Ações"; }
+
+  /* Movement Table Specific Labels - Updated to match ACTUAL columns */
+  .movement-table td:nth-of-type(1):before { content: "Data/Hora"; }
+  .movement-table td:nth-of-type(2):before { content: "Acessório"; }
+  .movement-table td:nth-of-type(3):before { content: "Responsável"; }
+  .movement-table td:nth-of-type(4):before { content: "O.S."; }
+  .movement-table td:nth-of-type(5):before { content: "Autor"; }
+  .movement-table td:nth-of-type(6):before { content: "Status"; }
+  .movement-table td:nth-of-type(7):before { content: "Ações"; }
+
+  .user-table td:nth-of-type(1):before { content: "Usuário"; }
+  .user-table td:nth-of-type(2):before { content: "Permissão"; }
+  .user-table td:nth-of-type(3):before { content: "Logada"; }
+  .user-table td:nth-of-type(4):before { content: "Nova"; }
+  .user-table td:nth-of-type(5):before { content: "Ações"; }
+
+  .pending-table td:nth-of-type(1):before { content: "Saída"; }
+  .pending-table td:nth-of-type(2):before { content: "Acessório"; }
+  .pending-table td:nth-of-type(3):before { content: "Responsável"; }
+  .pending-table td:nth-of-type(4):before { content: "O.S."; }
+  .pending-table td:nth-of-type(5):before { content: "Ação"; }
+
+  .completed-checkin-table td:nth-of-type(1):before { content: "Acessório"; }
+  .completed-checkin-table td:nth-of-type(2):before { content: "Data Check-in"; }
+  .completed-checkin-table td:nth-of-type(3):before { content: "Autor"; }
+}
+
+@media (max-width: 480px) {
+  .modal-card {
+    padding: 1.5rem;
+    border-radius: 20px;
+  }
+}
+
+@keyframes modalSlideUp {
+  from { opacity: 0; transform: translate(-50%, -45%) scale(0.95); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+.active-responsible-overlay {
+  animation: modalSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.donut-center-text {
+  fill: var(--text-primary);
+  font-family: inherit;
+  font-weight: 700;
+  text-anchor: middle;
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;

@@ -1,9 +1,11 @@
 import React, { useState } from 'react'
 import { ClipboardCheck, CheckCircle2, User, PackageSearch } from 'lucide-react'
+import ConfirmModal from './ConfirmModal'
 
 export default function PartSales({ movements, setMovements, accessories, responsibles, currentUser }) {
   const [filterDate, setFilterDate] = useState(new Date().toISOString().split('T')[0])
   const [currentPage, setCurrentPage] = useState(1)
+  const [checkinModal, setCheckinModal] = useState({ isOpen: false, movementId: null })
   const itemsPerPage = 10;
   
   // Filtragem por data
@@ -27,7 +29,8 @@ export default function PartSales({ movements, setMovements, accessories, respon
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentCheckedIn = checkedInMovements.slice(indexOfFirstItem, indexOfLastItem);
 
-  const handleCheckin = (id) => {
+  const handleCheckin = () => {
+    const id = checkinModal.movementId
     const updatedMovements = movements.map(m => 
       m.id === id ? { 
         ...m, 
@@ -38,6 +41,7 @@ export default function PartSales({ movements, setMovements, accessories, respon
       } : m
     )
     setMovements(updatedMovements)
+    setCheckinModal({ isOpen: false, movementId: null })
   }
 
   const getAccessoryLabel = (id) => {
@@ -103,7 +107,7 @@ export default function PartSales({ movements, setMovements, accessories, respon
             <ClipboardCheck size={20} className="accent" /> Pendentes de Check-in
           </h3>
           <div className="table-container">
-            <table>
+            <table className="responsive-table pending-table">
               <thead>
                 <tr>
                   <th>Saída</th>
@@ -135,7 +139,7 @@ export default function PartSales({ movements, setMovements, accessories, respon
                         <button 
                           className="btn-primary" 
                           style={{ padding: '0.5rem 1rem', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-                          onClick={() => handleCheckin(m.id)}
+                          onClick={() => setCheckinModal({ isOpen: true, movementId: m.id })}
                         >
                           <CheckCircle2 size={16} /> Check-in
                         </button>
@@ -178,7 +182,7 @@ export default function PartSales({ movements, setMovements, accessories, respon
             )}
           </div>
           <div className="table-container">
-            <table>
+            <table className="responsive-table completed-checkin-table">
               <thead>
                 <tr>
                   <th>Acessório</th>
@@ -215,6 +219,16 @@ export default function PartSales({ movements, setMovements, accessories, respon
           </div>
         </div>
       </div>
+
+      <ConfirmModal 
+        isOpen={checkinModal.isOpen}
+        title="Confirmar Check-in"
+        message="Deseja confirmar a chegada deste acessório e finalizar este registro de saída?"
+        type="success"
+        confirmText="Finalizar Check-in"
+        onConfirm={handleCheckin}
+        onCancel={() => setCheckinModal({ isOpen: false, movementId: null })}
+      />
     </div>
   )
 }

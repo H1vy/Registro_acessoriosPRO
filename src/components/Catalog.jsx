@@ -3,7 +3,7 @@ import { Plus, Trash2, User, Package, Users, ShieldCheck, UserPlus, Lock, Edit2,
 import ConfirmModal from './ConfirmModal'
 import { getAllData, addRecord, deleteRecord } from '../utils/db'
 
-export default function Catalog({ accessories, setAccessories, responsibles, setResponsibles, currentUser }) {
+export default function Catalog({ accessories, setAccessories, responsibles, setResponsibles, currentUser, showAlert }) {
   const [newAcc, setNewAcc] = useState({ factoryCode: '', commercialName: '' })
   const [newResp, setNewResp] = useState({ name: '' })
   
@@ -44,7 +44,7 @@ export default function Catalog({ accessories, setAccessories, responsibles, set
     
     // Verificar se já existe
     if (dbUsers.find(u => u.username === newUser.username)) {
-      alert('Usuário já existe!')
+      showAlert('Usuário já existe!', 'Já existe um perfil cadastrado com este nome de login.', 'danger')
       return
     }
 
@@ -52,12 +52,12 @@ export default function Catalog({ accessories, setAccessories, responsibles, set
     await addRecord('users', userData)
     setNewUser({ username: '', password: '', role: 'user' })
     loadUsers()
-    alert('Usuário cadastrado com sucesso!')
+    showAlert('Sucesso', 'Usuário cadastrado com sucesso!', 'success')
   }
 
   const removeUser = async (id) => {
     if (id === 'admin-id') {
-      alert('Não é possível remover o administrador principal.')
+      showAlert('Ação Negada', 'Não é possível remover o administrador principal por questões de segurança.', 'warning')
       return
     }
     setConfirmModal({
@@ -81,7 +81,7 @@ export default function Catalog({ accessories, setAccessories, responsibles, set
     
     const isDuplicate = accessories.some(acc => acc.factoryCode.toLowerCase() === newAcc.factoryCode.toLowerCase())
     if (isDuplicate) {
-      alert('Já existe um acessório cadastrado com este Código de Fábrica.')
+      showAlert('Acessório Duplicado', 'Já existe um acessório cadastrado com este Código de Fábrica.', 'warning')
       return
     }
 
@@ -95,7 +95,7 @@ export default function Catalog({ accessories, setAccessories, responsibles, set
 
     const isDuplicate = responsibles.some(resp => resp.name.toLowerCase() === newResp.name.toLowerCase())
     if (isDuplicate) {
-      alert('Já existe um responsável cadastrado com este Nome.')
+      showAlert('Responsável Duplicado', 'Já existe um responsável cadastrado com este Nome.', 'warning')
       return
     }
 
@@ -200,12 +200,12 @@ export default function Catalog({ accessories, setAccessories, responsibles, set
           </div>
 
           <div className="table-container">
-            <table>
+            <table className="responsive-table catalog-table">
               <thead>
                 <tr>
                   <th>Código</th>
                   <th>Nome Comercial</th>
-                  <th style={{ textAlign: 'center' }}>Ações</th>
+                  <th style={{ textAlign: 'right' }}>Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -231,8 +231,8 @@ export default function Catalog({ accessories, setAccessories, responsibles, set
                         />
                       ) : acc.commercialName}
                     </td>
-                    <td style={{ textAlign: 'center' }}>
-                      <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+                    <td style={{ textAlign: 'right' }}>
+                      <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
                         {editingAcc === acc.id ? (
                           <>
                             <button onClick={saveEditAcc} className="btn-icon-edit" style={{ color: 'var(--success)' }}><Check size={16} /></button>
@@ -313,11 +313,11 @@ export default function Catalog({ accessories, setAccessories, responsibles, set
           </div>
 
           <div className="table-container">
-            <table>
+            <table className="responsive-table user-table">
               <thead>
                 <tr>
-                  <th>Nome Completo</th>
-                  <th style={{ textAlign: 'center' }}>Ações</th>
+                  <th>Nome</th>
+                  <th style={{ textAlign: 'right' }}>Ações</th>
                 </tr>
               </thead>
               <tbody>

@@ -3,9 +3,8 @@ import { Shield, Key, Eye, EyeOff, Save, Trash2, UserPlus, User, Check, Loader2 
 import ConfirmModal from './ConfirmModal';
 import { getAllData, saveData } from '../utils/db';
 
-export default function AdminPanel({ currentUser, setMovements }) {
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
+export default function AdminPanel({ currentUser, users, setUsers, setMovements, showAlert }) {
+  const [loading, setLoading] = useState(false);
   const [visiblePasswords, setVisiblePasswords] = useState({});
   const [newPassword, setNewPassword] = useState({});
   const [savingRow, setSavingRow] = useState(null);
@@ -39,20 +38,7 @@ export default function AdminPanel({ currentUser, setMovements }) {
     });
   };
 
-  const loadUsers = async () => {
-    try {
-      let data = await getAllData('users');
-      setUsers(data);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadUsers();
-  }, []);
+  // A sincronização agora é feita via props do App.jsx em tempo real
 
   const togglePasswordVisibility = (userId) => {
     setVisiblePasswords(prev => ({ ...prev, [userId]: !prev[userId] }));
@@ -71,7 +57,7 @@ export default function AdminPanel({ currentUser, setMovements }) {
     
     // Default admin constraint check if needed, allowing it to continue here but could prevent demotion of current admin
     if (userId === currentUser.id && roleToSet === 'user') {
-      alert('Você não pode remover seu próprio acesso de administrador.');
+      showAlert('Ação Bloqueada', 'Você não pode remover seu próprio acesso de administrador para garantir que o sistema não fique sem um gestor ativo.', 'danger')
       return;
     }
 
@@ -95,7 +81,6 @@ export default function AdminPanel({ currentUser, setMovements }) {
         return u;
       });
       
-      await saveData('users', updatedUsers);
       setUsers(updatedUsers);
       
       setNewPassword(prev => {
@@ -119,7 +104,7 @@ export default function AdminPanel({ currentUser, setMovements }) {
 
   const deleteUser = async (userId) => {
     if (userId === 'admin-id' || userId === currentUser.id) {
-      alert('Não é possível excluir a própria conta ou o admin padrão por segurança.');
+      showAlert('Segurança Ativa', 'Por motivos de segurança, não é permitido excluir a própria conta ou o administrador padrão do sistema.', 'warning')
       return;
     }
     
@@ -132,7 +117,6 @@ export default function AdminPanel({ currentUser, setMovements }) {
       onConfirm: async () => {
         try {
           const updatedUsers = users.filter(u => u.id !== userId);
-          await saveData('users', updatedUsers);
           setUsers(updatedUsers);
           setConfirmModal({ isOpen: false });
           setMessage('Usuário excluído com sucesso do sistema.');
@@ -165,7 +149,6 @@ export default function AdminPanel({ currentUser, setMovements }) {
       };
 
       const updatedUsers = [...users, recordToAdd];
-      await saveData('users', updatedUsers);
       setUsers(updatedUsers);
       
       setNewUser({ username: '', password: '', role: 'user' });
@@ -281,7 +264,7 @@ export default function AdminPanel({ currentUser, setMovements }) {
           <p>Carregando perfis...</p>
         ) : (
           <div style={{ width: '100%', overflow: 'visible' }}>
-            <table className="data-table">
+            <table className="responsive-table user-table">
               <thead>
                 <tr>
                   <th>Usuário</th>

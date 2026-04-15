@@ -13,7 +13,8 @@ export default function ConfirmModal({
   showInput = false,
   inputValue = '',
   onInputChange = null,
-  inputPlaceholder = ''
+  inputPlaceholder = '',
+  hideCancel = false
 }) {
   if (!isOpen) return null;
 
@@ -56,29 +57,31 @@ export default function ConfirmModal({
             />
           )}
         </div>
-        <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
+        <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem', justifyContent: hideCancel ? 'center' : 'stretch' }}>
+          {!hideCancel && (
+            <button 
+              className="btn-primary" 
+              style={{ 
+                flex: 1, 
+                background: 'var(--bg-input)', 
+                color: 'var(--text-primary)', 
+                boxShadow: 'none',
+                padding: '0.75rem' 
+              }}
+              onClick={onCancel}
+            >
+              {cancelText}
+            </button>
+          )}
           <button 
             className="btn-primary" 
             style={{ 
-              flex: 1, 
-              background: 'var(--bg-input)', 
-              color: 'var(--text-primary)', 
-              boxShadow: 'none',
-              padding: '0.75rem' 
-            }}
-            onClick={onCancel}
-          >
-            {cancelText}
-          </button>
-          <button 
-            className="btn-primary" 
-            style={{ 
-              flex: 1, 
+              flex: hideCancel ? '0 1 200px' : 1, 
               background: isDanger ? 'var(--danger)' : isSuccess ? 'var(--success)' : 'var(--accent)', 
               color: isDanger || isSuccess ? '#fff' : '#020617',
               padding: '0.75rem' 
             }}
-            onClick={onConfirm}
+            onClick={onConfirm || onCancel}
           >
             {confirmText}
           </button>

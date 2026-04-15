@@ -2,8 +2,9 @@ import React, { useState } from 'react'
 import { ArrowUpRight, ArrowDownLeft, ClipboardCheck, Trash2, User, XCircle, RotateCcw, X, Info } from 'lucide-react'
 import CustomSelect from './CustomSelect'
 import ConfirmModal from './ConfirmModal'
+import { saveData } from '../utils/db'
 
-export default function Movements({ movements, setMovements, accessories, responsibles, currentUser }) {
+export default function Movements({ movements, setMovements, accessories, responsibles, currentUser, showAlert }) {
   const [formData, setFormData] = useState({
     accessoryId: '',
     responsibleId: '',
@@ -24,7 +25,7 @@ export default function Movements({ movements, setMovements, accessories, respon
   const handleSubmit = (e) => {
     e.preventDefault()
     if (!formData.accessoryId || !formData.responsibleId) {
-      alert('Selecione o acessório e o responsável')
+      showAlert('Campos Obrigatórios', 'Por favor, selecione tanto o acessório quanto o responsável pela saída.', 'warning')
       return
     }
 
@@ -52,12 +53,12 @@ export default function Movements({ movements, setMovements, accessories, respon
     })
   }
 
-  const handleModalSubmit = () => {
+  const handleModalSubmit = async () => {
     const { movementId, type, returnedBy, returnReason, annulReason } = modalState
     
     if (type === 'return') {
       if (!returnedBy.trim() || !returnReason.trim()) {
-        alert('Por favor, preencha quem está retornando e o motivo.')
+        showAlert('Campos Obrigatórios', 'Por favor, preencha quem está devolvendo e o motivo do retorno.', 'warning')
         return
       }
       const updatedMovements = movements.map(m => 
@@ -73,17 +74,19 @@ export default function Movements({ movements, setMovements, accessories, respon
           }
         } : m
       )
-      setMovements(updatedMovements)
+      // Persiste no Firebase para que o onValue do App.jsx coordene a atualização
+      await saveData('movements', updatedMovements)
       setModalState({ ...modalState, isOpen: false })
     } else if (type === 'annul') {
       if (!annulReason.trim()) {
-        alert('Por favor, justifique o motivo da anulação.')
+        showAlert('Justificativa Obrigatória', 'Por favor, forneça o motivo da anulação para prosseguir.', 'warning')
         return
       }
       const updatedMovements = movements.map(m => 
         m.id === movementId ? { ...m, annulled: true, isReturn: false, reason: annulReason.trim() } : m
       )
-      setMovements(updatedMovements)
+      // Persiste no Firebase para que o onValue do App.jsx coordene a atualização
+      await saveData('movements', updatedMovements)
       setModalState({ ...modalState, isOpen: false })
     }
   }
@@ -93,7 +96,7 @@ export default function Movements({ movements, setMovements, accessories, respon
     
     const movement = movements.find(m => m.id === id)
     if (!movement.annulled && !movement.checkin) {
-      alert('ERRO: Apenas registros ANULADOS ou FINALIZADOS (Check-in/Retorno) podem ser removidos.')
+      showAlert('Ação Não Permitida', 'Apenas registros que já foram ANULADOS ou FINALIZADOS (via Check-in ou Retorno) podem ser removidos do histórico.', 'danger')
       return
     }
 
@@ -104,11 +107,11 @@ export default function Movements({ movements, setMovements, accessories, respon
     })
   }
 
-  const handleConfirmRemove = () => {
+  const handleConfirmRemove = async () => {
     const { movementId, reason } = removeModal
     
     if (!reason.trim()) {
-      alert('A justificativa é obrigatória para remover um registro.')
+      showAlert('Campo Obrigatório', 'A justificativa é obrigatória para realizar a remoção lógica deste registro.', 'warning')
       return
     }
 
@@ -121,8 +124,14 @@ export default function Movements({ movements, setMovements, accessories, respon
         deletedBy: currentUser.username
       } : m
     )
-    setMovements(updatedMovements)
-    setRemoveModal({ isOpen: false, movementId: null, reason: '' })
+    // Persiste no Firebase — o onValue no App.jsx vai atualizar o estado global automaticamente
+    try {
+      await saveData('movements', updatedMovements)
+      setRemoveModal({ isOpen: false, movementId: null, reason: '' })
+    } catch (err) {
+      console.error('Erro ao remover registro:', err)
+      showAlert('Erro', 'Não foi possível remover o registro. Tente novamente.', 'danger')
+    }
   }
 
   const getAccessoryLabel = (id) => {
@@ -326,7 +335,7 @@ export default function Movements({ movements, setMovements, accessories, respon
           </div>
         </div>
         <div className="table-container">
-          <table>
+          <table className="responsive-table movement-table">
             <thead>
               <tr>
                 <th>Data / Hora Saída</th>

@@ -26,11 +26,10 @@ export const subscribeToData = (storeName, callback) => {
   return onValue(dbRef, (snapshot) => {
     if (snapshot.exists()) {
       const data = snapshot.val();
-      if (Array.isArray(data)) {
-        callback(data.filter(item => item !== null));
-      } else {
-        callback(Object.values(data));
-      }
+      const resolved = Array.isArray(data) ? data.filter(item => item !== null) : Object.values(data);
+      // Espelhar no localStorage para carregamento ultra-rápido no próximo F5
+      localStorage.setItem(storeName, JSON.stringify(resolved));
+      callback(resolved);
     } else {
       callback([]);
     }
@@ -64,7 +63,8 @@ export const deleteRecord = async (storeName, id) => {
 export const saveData = async (storeName, data) => {
   try {
     await set(ref(dbFB, storeName), data);
-    console.log(`Dados salvos inteiramente com sucesso em ${storeName} no Firebase.`);
+    localStorage.setItem(storeName, JSON.stringify(data));
+    console.log(`Dados sincronizados em Firebase e LocalStorage para ${storeName}.`);
   } catch (error) {
     console.error(`Erro ao salvar array em ${storeName}:`, error);
     throw error;
