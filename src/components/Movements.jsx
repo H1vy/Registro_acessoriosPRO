@@ -1,8 +1,7 @@
 import React, { useState } from 'react'
-import { ArrowUpRight, ArrowDownLeft, ClipboardCheck, Trash2, User, XCircle, RotateCcw, X, Info } from 'lucide-react'
+import { ArrowUpRight, ArrowDownLeft, ClipboardCheck, Trash2, User, XCircle, RotateCcw, X, Info, History, Clock } from 'lucide-react'
 import CustomSelect from './CustomSelect'
 import ConfirmModal from './ConfirmModal'
-import { saveData } from '../utils/db'
 
 export default function Movements({ movements, setMovements, accessories, responsibles, currentUser, showAlert }) {
   const [formData, setFormData] = useState({
@@ -16,11 +15,14 @@ export default function Movements({ movements, setMovements, accessories, respon
     movementId: null,
     type: null,
     returnedBy: '',
+    returnedById: '',
     returnReason: '',
-    annulReason: ''
+    annulReason: '',
+    hasCheckin: false
   })
   const [removeModal, setRemoveModal] = useState({ isOpen: false, movementId: null, reason: '' })
   const [filterDate, setFilterDate] = useState(new Date().toISOString().split('T')[0])
+  const [historyModal, setHistoryModal] = useState({ isOpen: false, movement: null })
 
   const handleSubmit = (e) => {
     e.preventDefault()
@@ -38,30 +40,36 @@ export default function Movements({ movements, setMovements, accessories, respon
       checkin: null // Para a futura aba Pate sales
     }
 
-    setMovements([newMovement, ...movements])
+    setMovements(prev => [newMovement, ...prev])
     setFormData({ ...formData, accessoryId: '', soNumber: '' })
   }
-
   const handleAnnulleOpen = (id) => {
+    const movement = movements.find(m => m.id === id)
     setModalState({ 
       isOpen: true, 
       movementId: id, 
       type: null, 
       returnedBy: '', 
+      returnedById: '',
       returnReason: '', 
-      annulReason: '' 
+      annulReason: '',
+      hasCheckin: !!movement.checkin
     })
   }
 
   const handleModalSubmit = async () => {
-    const { movementId, type, returnedBy, returnReason, annulReason } = modalState
+    const { movementId, type, returnedBy, returnReason, annulReason, hasCheckin } = modalState
     
+    if (type === 'return' && hasCheckin) {
+      showAlert('Ação Negada', 'Este item já possui check-in realizado e não pode ser retornado.', 'danger');
+      return;
+    }
     if (type === 'return') {
       if (!returnedBy.trim() || !returnReason.trim()) {
         showAlert('Campos Obrigatórios', 'Por favor, preencha quem está devolvendo e o motivo do retorno.', 'warning')
         return
       }
-      const updatedMovements = movements.map(m => 
+      setMovements(prev => prev.map(m => 
         m.id === movementId ? { 
           ...m, 
           annulled: true, 
@@ -73,20 +81,16 @@ export default function Movements({ movements, setMovements, accessories, respon
             author: currentUser?.username || 'Sistema'
           }
         } : m
-      )
-      // Persiste no Firebase para que o onValue do App.jsx coordene a atualização
-      await saveData('movements', updatedMovements)
+      ))
       setModalState({ ...modalState, isOpen: false })
     } else if (type === 'annul') {
       if (!annulReason.trim()) {
         showAlert('Justificativa Obrigatória', 'Por favor, forneça o motivo da anulação para prosseguir.', 'warning')
         return
       }
-      const updatedMovements = movements.map(m => 
+      setMovements(prev => prev.map(m => 
         m.id === movementId ? { ...m, annulled: true, isReturn: false, reason: annulReason.trim() } : m
-      )
-      // Persiste no Firebase para que o onValue do App.jsx coordene a atualização
-      await saveData('movements', updatedMovements)
+      ))
       setModalState({ ...modalState, isOpen: false })
     }
   }
@@ -115,7 +119,7 @@ export default function Movements({ movements, setMovements, accessories, respon
       return
     }
 
-    const updatedMovements = movements.map(m => 
+    setMovements(prev => prev.map(m => 
       m.id === movementId ? { 
         ...m, 
         isDeleted: true, 
@@ -123,15 +127,8 @@ export default function Movements({ movements, setMovements, accessories, respon
         deletionTimestamp: new Date().toISOString(),
         deletedBy: currentUser.username
       } : m
-    )
-    // Persiste no Firebase — o onValue no App.jsx vai atualizar o estado global automaticamente
-    try {
-      await saveData('movements', updatedMovements)
-      setRemoveModal({ isOpen: false, movementId: null, reason: '' })
-    } catch (err) {
-      console.error('Erro ao remover registro:', err)
-      showAlert('Erro', 'Não foi possível remover o registro. Tente novamente.', 'danger')
-    }
+    ))
+    setRemoveModal({ isOpen: false, movementId: null, reason: '' })
   }
 
   const getAccessoryLabel = (id) => {
@@ -148,6 +145,56 @@ export default function Movements({ movements, setMovements, accessories, respon
     if (!isoStr) return '-'
     const date = new Date(isoStr)
     return date.toLocaleString('pt-BR')
+  }
+
+  // Função para compilar a timeline da movimentação em ordem decrescente
+  const getMovementLog = (m) => {
+    const log = []
+
+    // 1. Saída original
+    log.push({
+      type: 'saida',
+      label: 'Saída Registrada',
+      at: m.timestamp,
+      by: m.author,
+      desc: `Acessório retirado para O.S: ${m.soNumber || 'Não informada'}`
+    })
+
+    // 2. Registro de Retorno
+    if (m.isReturn && m.returnInfo) {
+      log.push({
+        type: 'retorno',
+        label: 'Retorno ao Estoque',
+        at: m.returnInfo.timestamp,
+        by: m.returnInfo.author,
+        desc: `Devolvido por: ${m.returnInfo.returnedBy}. Motivo: ${m.returnInfo.returnReason}`
+      })
+    }
+
+    // 3. Anulação (se não for retorno)
+    if (m.annulled && !m.isReturn) {
+      log.push({
+        type: 'anulacao',
+        label: 'Registro Anulado',
+        at: m.timestamp, // m.timestamp é usado aqui ou deveríamos ter m.annulledAt? Vou usar o timestamp do registro por enquanto ou assumir agora
+        by: m.author,
+        desc: `Motivo: ${m.reason}`
+      })
+    }
+
+    // 4. Check-in
+    if (m.checkin) {
+      log.push({
+        type: 'checkin',
+        label: 'Check-in Realizado',
+        at: m.checkin.timestamp,
+        by: m.checkin.author,
+        desc: 'Produto validado pelo setor responsável.'
+      })
+    }
+
+    // Ordenar: mais recente primeiro
+    return log.sort((a, b) => new Date(b.at) - new Date(a.at))
   }
 
   return (
@@ -175,20 +222,29 @@ export default function Movements({ movements, setMovements, accessories, respon
             <div className="modal-header">
               <h3>Ação no Registro</h3>
               <p>O que você deseja fazer com este registro de saída?</p>
+              {modalState.hasCheckin && (
+                <div className="checkin-warning-alert">
+                  <Info size={14} />
+                  <span>Este registro já possui <strong>Check-in</strong>. O retorno foi bloqueado; utilize a Anulação se houver erro.</span>
+                </div>
+              )}
             </div>
             
             <div className="action-buttons-grid">
               <button 
-                className={`action-card-btn ${modalState.type === 'return' ? 'active is-success' : ''}`}
-                onClick={() => setModalState({ ...modalState, type: 'return' })}
+                className={`action-card-btn ${modalState.type === 'return' ? 'active is-success' : ''} ${modalState.hasCheckin ? 'disabled' : ''}`}
+                onClick={() => !modalState.hasCheckin && setModalState({ ...modalState, type: 'return' })}
                 type="button"
+                disabled={modalState.hasCheckin}
               >
-                <div style={{ background: modalState.type === 'return' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '50%', color: modalState.type === 'return' ? '#10b981' : '#94a3b8' }}>
+                <div style={{ background: modalState.type === 'return' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '50%', color: modalState.type === 'return' ? '#10b981' : (modalState.hasCheckin ? '#4a5568' : '#94a3b8'), opacity: modalState.hasCheckin ? 0.3 : 1 }}>
                   <RotateCcw size={28} />
                 </div>
                 <div style={{ textAlign: 'center' }}>
-                  <span style={{ display: 'block', fontWeight: 700, fontSize: '1.05rem', marginBottom: '2px' }}>Retorno</span>
-                  <span style={{ fontSize: '0.75rem', color: '#94a3b8', opacity: 0.8 }}>Produto voltando ao estoque</span>
+                  <span style={{ display: 'block', fontWeight: 700, fontSize: '1.05rem', marginBottom: '2px', opacity: modalState.hasCheckin ? 0.5 : 1 }}>Retorno</span>
+                  <span style={{ fontSize: '0.75rem', color: '#94a3b8', opacity: 0.8 }}>
+                    {modalState.hasCheckin ? 'Bloqueado pós Check-in' : 'Produto voltando ao estoque'}
+                  </span>
                 </div>
               </button>
 
@@ -209,14 +265,19 @@ export default function Movements({ movements, setMovements, accessories, respon
 
             {modalState.type === 'return' && (
               <div className="modal-form-area" style={{ animation: 'fadeIn 0.3s' }}>
-                <div className="input-group">
-                  <label>Quem está devolvendo?</label>
-                  <input 
-                    type="text" 
-                    placeholder="Nome do cliente/funcionário" 
-                    value={modalState.returnedBy}
-                    onChange={(e) => setModalState({ ...modalState, returnedBy: e.target.value })}
-                    autoFocus
+                <div className="input-group" style={{ marginBottom: '1rem' }}>
+                  <CustomSelect 
+                    label="Quem está devolvendo?"
+                    value={modalState.returnedById || ''}
+                    onChange={(e) => {
+                      const rName = responsibles.find(r => r.id === e.target.value)?.name || ''
+                      setModalState({ ...modalState, returnedById: e.target.value, returnedBy: rName })
+                    }}
+                    options={responsibles.map(resp => ({
+                      value: resp.id,
+                      label: resp.name
+                    }))}
+                    placeholder="Selecione o responsável..."
                   />
                 </div>
                 <div className="input-group">
@@ -348,7 +409,8 @@ export default function Movements({ movements, setMovements, accessories, respon
               </tr>
             </thead>
             <tbody>
-              {movements
+              {[...movements]
+                .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
                 .filter(m => {
                   if (m.isDeleted) return false 
                   if (!filterDate) return true
@@ -363,27 +425,18 @@ export default function Movements({ movements, setMovements, accessories, respon
                 >
                   <td style={{ fontSize: '0.85rem', fontWeight: 500 }}>{formatDate(m.timestamp)}</td>
                   <td style={{ fontWeight: 500 }}>
-                    <div style={{ color: 'var(--text-primary)' }}>{getAccessoryLabel(m.accessoryId)}</div>
-                    {m.annulled && !m.isReturn && (
-                      <div className="record-detail-block annulment-reason">
-                         <strong>Motivo Anulação:</strong> {m.reason}
-                      </div>
-                    )}
-                    {m.isReturn && (
-                      <div className="record-detail-block return-details">
-                         <strong>Retornado por:</strong> {m.returnInfo?.returnedBy} <br/>
-                         <strong>Motivo:</strong> {m.returnInfo?.returnReason || 'Não especificado'} <br/>
-                         <span style={{ opacity: 0.7, fontSize: '0.75rem' }}>
-                           Recebido em {formatDate(m.returnInfo?.timestamp)} por {m.returnInfo?.author}
-                         </span>
-                      </div>
-                    )}
-                    {m.checkin && (
-                      <div className="record-detail-block checkin-details">
-                         <strong>Check-in realizado:</strong> <br/>
-                         <span style={{ opacity: 0.8 }}>{formatDate(m.checkin.timestamp)} por {m.checkin.author}</span>
-                      </div>
-                    )}
+                    <div className="movement-accessory-cell">
+                      <span>{getAccessoryLabel(m.accessoryId)}</span>
+                      {(m.checkin || m.annulled || m.isReturn) && (
+                        <button 
+                          className="btn-history-trigger-v2" 
+                          title="Ver Timeline Completa"
+                          onClick={() => setHistoryModal({ isOpen: true, movement: m })}
+                        >
+                          <Clock size={16} />
+                        </button>
+                      )}
+                    </div>
                   </td>
                   <td style={{ fontWeight: 600 }}>{getResponsibleName(m.responsibleId)}</td>
                   <td><code style={{ background: 'var(--bg-input)', padding: '2px 8px', borderRadius: '4px', fontSize: '0.8rem', border: '1px solid var(--border)' }}>{m.soNumber || '-'}</code></td>
@@ -432,6 +485,50 @@ export default function Movements({ movements, setMovements, accessories, respon
           </table>
         </div>
       </div>
+
+      {/* Modal de Timeline de Movimentação */}
+      {historyModal.isOpen && historyModal.movement && (
+        <div className="modal-backdrop">
+          <div className="modal-card timeline-modal glass-effect">
+            <button className="modal-close-btn" onClick={() => setHistoryModal({ isOpen: false, movement: null })}>
+              <X size={24} />
+            </button>
+            <div className="modal-header">
+              <div className="header-icon-title">
+                <History className="accent" size={24} />
+                <h3>Linha do Tempo</h3>
+              </div>
+              <p className="subtitle">Histórico completo: <strong>{getAccessoryLabel(historyModal.movement.accessoryId)}</strong></p>
+            </div>
+            
+            <div className="modal-timeline-container">
+              {getMovementLog(historyModal.movement).map((entry, eIdx) => (
+                <div key={eIdx} className={`log-entry ${entry.type} large`}>
+                  <div className="entry-header">
+                    <span className="label">{entry.label}</span>
+                    <span className="date">{formatDate(entry.at)}</span>
+                  </div>
+                  <p className="desc">{entry.desc}</p>
+                  <div className="entry-footer">
+                    <span className="author-badge">
+                      <User size={12} />
+                      {entry.by}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <button 
+              className="btn-primary" 
+              style={{ width: '100%', marginTop: '1.5rem' }}
+              onClick={() => setHistoryModal({ isOpen: false, movement: null })}
+            >
+              Fechar Visualização
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -85,7 +85,7 @@ export default function Catalog({ accessories, setAccessories, responsibles, set
       return
     }
 
-    setAccessories([...accessories, { ...newAcc, id: Date.now().toString() }])
+    setAccessories(prev => [...prev, { ...newAcc, id: Date.now().toString() }])
     setNewAcc({ factoryCode: '', commercialName: '' })
   }
 
@@ -99,12 +99,12 @@ export default function Catalog({ accessories, setAccessories, responsibles, set
       return
     }
 
-    setResponsibles([...responsibles, { ...newResp, id: Date.now().toString() }])
+    setResponsibles(prev => [...prev, { ...newResp, id: Date.now().toString() }])
     setNewResp({ name: '' })
   }
 
-  const removeAccessory = (id) => setAccessories(accessories.filter(a => a.id !== id))
-  const removeResponsible = (id) => setResponsibles(responsibles.filter(r => r.id !== id))
+  const removeAccessory = (id) => setAccessories(prev => prev.filter(a => a.id !== id))
+  const removeResponsible = (id) => setResponsibles(prev => prev.filter(r => r.id !== id))
 
   const handleEditAcc = (acc) => {
     setEditingAcc(acc.id)
@@ -112,7 +112,7 @@ export default function Catalog({ accessories, setAccessories, responsibles, set
   }
 
   const saveEditAcc = () => {
-    setAccessories(accessories.map(a => a.id === editingAcc ? { ...a, ...editAccData } : a))
+    setAccessories(prev => prev.map(a => a.id === editingAcc ? { ...a, ...editAccData } : a))
     setEditingAcc(null)
   }
 
@@ -122,7 +122,7 @@ export default function Catalog({ accessories, setAccessories, responsibles, set
   }
 
   const saveEditResp = () => {
-    setResponsibles(responsibles.map(r => r.id === editingResp ? { ...r, ...editRespData } : r))
+    setResponsibles(prev => prev.map(r => r.id === editingResp ? { ...r, ...editRespData } : r))
     setEditingResp(null)
   }
 

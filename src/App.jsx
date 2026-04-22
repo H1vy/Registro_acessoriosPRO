@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { LayoutDashboard, ClipboardList, Database, HardDriveDownload, HardDriveUpload, ClipboardCheck } from 'lucide-react'
+import { LayoutDashboard, ClipboardList, Database, HardDriveDownload, HardDriveUpload, ClipboardCheck, Package } from 'lucide-react'
 import './App.css'
 
 import Dashboard from './components/Dashboard'
@@ -9,8 +9,11 @@ import PartSales from './components/PartSales'
 import Login from './components/Login'
 import AdminPanel from './components/AdminPanel'
 import ConfirmModal from './components/ConfirmModal'
-import { getAllData, saveData, seedAdminUser, subscribeToData } from './utils/db'
-import { LogOut, User, Shield, Sun, Moon } from 'lucide-react'
+import Orders from './components/Orders'
+import ServiceOrders from './components/ServiceOrders'
+import { getAllData, saveData, seedAdminUser, subscribeToData, migrateUsersSector } from './utils/db'
+import { LogOut, User, Shield, Sun, Moon, FileText } from 'lucide-react'
+
 function App() {
   const [activeTab, setActiveTab] = useState('movements')
   const [accessories, setAccessories] = useState([])
@@ -22,47 +25,72 @@ function App() {
   const [confirmModal, setConfirmModal] = useState({ isOpen: false })
   const [alertConfig, setAlertConfig] = useState({ isOpen: false, title: '', message: '', type: 'warning' })
   const [users, setUsers] = useState([])
-  
+  const [orders, setOrders] = useState([])
+  const [serviceOrders, setServiceOrders] = useState([])
+
   const fileInputRef = useRef(null)
 
-  useEffect(() => {
-    // Semeia o admin se necessário
-    seedAdminUser()
+  // Determina as abas disponíveis baseado no papel e setor do usuário (DEFINITIVO)
+  const getAvailableTabs = () => {
+    if (currentUser?.role === 'admin') {
+      return ['movements', 'catalog', 'dashboard', 'part-sales', 'orders', 'service-orders', 'admin']
+    }
+    if (currentUser?.sector === 'atendimento') {
+      // Atendimento: SOMENTE Pedidos, Dashboard e Anexos OS
+      return ['orders', 'dashboard', 'service-orders']
+    }
+    // Estoque: tudo exceto Administração
+    return ['movements', 'catalog', 'dashboard', 'part-sales', 'orders', 'service-orders']
+  }
 
-    // Carrega o usuário da sessão para manter logado se houver (por ex, da localStorage)
+  // Redireciona para aba válida caso o usuário atual não tenha permissão
+  useEffect(() => {
+    if (!currentUser) return
+    const tabs = getAvailableTabs()
+    if (!tabs.includes(activeTab)) {
+      setActiveTab(tabs[0])
+    }
+  }, [currentUser])
+
+  useEffect(() => {
+    seedAdminUser()
+    migrateUsersSector()
+
     const savedUser = localStorage.getItem('currentUser')
     if (savedUser) {
-      // Validar caso o user tenha sido apagado ou mudou a senha
-      // mas por performance e para evitar flash, assumimos inicialmente.
-      // Poderia ser feita uma verificação rápida no banco:
       getAllData('users').then(users => {
-         const dbUser = users.find(u => u.id === JSON.parse(savedUser).id);
-         if (dbUser) {
-            setCurrentUser(dbUser);
-         } else {
-            setCurrentUser(null);
-            localStorage.removeItem('currentUser');
-         }
-      });
+        const dbUser = users.find(u => u.id === JSON.parse(savedUser).id)
+        if (dbUser) {
+          setCurrentUser(dbUser)
+          // Redirecionar com base no setor ao restaurar sessão
+          if (dbUser.sector === 'atendimento') {
+            setActiveTab('orders')
+          }
+        } else {
+          setCurrentUser(null)
+          localStorage.removeItem('currentUser')
+        }
+      })
     }
 
-    // Assinar mudanças do Firebase em tempo real
-    const unsubAcc = subscribeToData('accessories', setAccessories);
-    const unsubResp = subscribeToData('responsibles', setResponsibles);
-    const unsubMov = subscribeToData('movements', setMovements);
-    const unsubUsers = subscribeToData('users', setUsers);
+    const unsubAcc    = subscribeToData('accessories', setAccessories)
+    const unsubResp   = subscribeToData('responsibles', setResponsibles)
+    const unsubMov    = subscribeToData('movements', setMovements)
+    const unsubUsers  = subscribeToData('users', setUsers)
+    const unsubOrders = subscribeToData('orders', setOrders)
+    const unsubServiceOrders = subscribeToData('service_orders', setServiceOrders)
 
     const checkMigrationAndLoad = async () => {
       try {
-        let acc = await getAllData('accessories')
+        let acc  = await getAllData('accessories')
         let resp = await getAllData('responsibles')
-        let mov = await getAllData('movements')
+        let mov  = await getAllData('movements')
 
         if (acc.length === 0 && resp.length === 0 && mov.length === 0) {
-          const lsAcc = JSON.parse(localStorage.getItem('accessories') || '[]')
+          const lsAcc  = JSON.parse(localStorage.getItem('accessories') || '[]')
           const lsResp = JSON.parse(localStorage.getItem('responsibles') || '[]')
-          const lsMov = JSON.parse(localStorage.getItem('movements') || '[]')
-          
+          const lsMov  = JSON.parse(localStorage.getItem('movements') || '[]')
+
           if (lsAcc.length > 0 || lsResp.length > 0 || lsMov.length > 0) {
             await saveData('accessories', lsAcc)
             await saveData('responsibles', lsResp)
@@ -70,7 +98,7 @@ function App() {
           }
         }
       } catch (error) {
-        console.error("Erro ao carregar dados:", error)
+        console.error('Erro ao carregar dados:', error)
       } finally {
         setLoading(false)
       }
@@ -79,10 +107,12 @@ function App() {
     checkMigrationAndLoad()
 
     return () => {
-      unsubAcc();
-      unsubResp();
-      unsubMov();
-      unsubUsers();
+      unsubAcc()
+      unsubResp()
+      unsubMov()
+      unsubUsers()
+      unsubOrders()
+      unsubServiceOrders()
     }
   }, [])
 
@@ -94,6 +124,12 @@ function App() {
   const handleLogin = (user) => {
     setCurrentUser(user)
     localStorage.setItem('currentUser', JSON.stringify(user))
+    // Define aba inicial correta por setor
+    if (user.sector === 'atendimento') {
+      setActiveTab('orders')
+    } else {
+      setActiveTab('movements')
+    }
   }
 
   const handleLogout = async () => {
@@ -117,33 +153,57 @@ function App() {
   }
 
   const showAlert = (title, message, type = 'warning') => {
-    setAlertConfig({ isOpen: true, title, message, type });
-  };
+    setAlertConfig({ isOpen: true, title, message, type })
+  }
 
-  // Funções de atualização explícita para evitar loopings e race conditions do useEffect
+  // Funções de atualização com persistência no Firebase (Garante sincronia real-time)
   const handleSetAccessories = (newData) => {
-    const resolved = typeof newData === 'function' ? newData(accessories) : newData;
-    setAccessories(resolved);
-    saveData('accessories', resolved);
-  };
+    setAccessories(prev => {
+      const resolved = typeof newData === 'function' ? newData(prev) : newData;
+      saveData('accessories', resolved);
+      return resolved;
+    });
+  }
 
   const handleSetResponsibles = (newData) => {
-    const resolved = typeof newData === 'function' ? newData(responsibles) : newData;
-    setResponsibles(resolved);
-    saveData('responsibles', resolved);
-  };
+    setResponsibles(prev => {
+      const resolved = typeof newData === 'function' ? newData(prev) : newData;
+      saveData('responsibles', resolved);
+      return resolved;
+    });
+  }
 
   const handleSetMovements = (newData) => {
-    const resolved = typeof newData === 'function' ? newData(movements) : newData;
-    setMovements(resolved);
-    saveData('movements', resolved);
-  };
+    setMovements(prev => {
+      const resolved = typeof newData === 'function' ? newData(prev) : newData;
+      saveData('movements', resolved);
+      return resolved;
+    });
+  }
 
   const handleSetUsers = (newData) => {
-    const resolved = typeof newData === 'function' ? newData(users) : newData;
-    setUsers(resolved);
-    saveData('users', resolved);
-  };
+    setUsers(prev => {
+      const resolved = typeof newData === 'function' ? newData(prev) : newData;
+      saveData('users', resolved);
+      return resolved;
+    });
+  }
+
+  const handleSetOrders = (newData) => {
+    setOrders(prev => {
+      const resolved = typeof newData === 'function' ? newData(prev) : newData;
+      saveData('orders', resolved);
+      return resolved;
+    });
+  }
+
+  const handleSetServiceOrders = (newData) => {
+    setServiceOrders(prev => {
+      const resolved = typeof newData === 'function' ? newData(prev) : newData;
+      saveData('service_orders', resolved);
+      return resolved;
+    });
+  }
 
   const exportBackup = () => {
     const data = { accessories, responsibles, movements, exportDate: new Date().toISOString() }
@@ -177,19 +237,19 @@ function App() {
               setMovements(data.movements)
               if (data.users) setUsers(data.users)
               setConfirmModal({ isOpen: false })
-              setTimeout(() => showAlert("Sucesso", "Backup restaurado com sucesso!", "success"), 100)
+              setTimeout(() => showAlert('Sucesso', 'Backup restaurado com sucesso!', 'success'), 100)
             },
             onCancel: () => setConfirmModal({ isOpen: false })
           })
         } else {
-          showAlert("Erro", "Arquivo de backup inválido.", "danger")
+          showAlert('Erro', 'Arquivo de backup inválido.', 'danger')
         }
       } catch (err) {
-        showAlert("Erro", "Erro ao ler o arquivo de backup.", "danger")
+        showAlert('Erro', 'Erro ao ler o arquivo de backup.', 'danger')
       }
     }
     reader.readAsText(file)
-    e.target.value = '' // reseta input para permitir mesmo arquivo de repetição
+    e.target.value = ''
   }
 
   const handleRestoreClick = () => {
@@ -201,13 +261,21 @@ function App() {
 
     switch (activeTab) {
       case 'dashboard':
-        return <Dashboard movements={movements} accessories={accessories} responsibles={responsibles} />
+        return (
+          <Dashboard
+            movements={movements}
+            accessories={accessories}
+            responsibles={responsibles}
+            orders={orders}
+            currentUser={currentUser}
+          />
+        )
       case 'movements':
         return (
-          <Movements 
-            movements={movements} 
-            accessories={accessories} 
-            responsibles={responsibles} 
+          <Movements
+            movements={movements}
+            accessories={accessories}
+            responsibles={responsibles}
             setMovements={handleSetMovements}
             currentUser={currentUser}
             showAlert={showAlert}
@@ -215,8 +283,8 @@ function App() {
         )
       case 'catalog':
         return (
-          <Catalog 
-            accessories={accessories} 
+          <Catalog
+            accessories={accessories}
             setAccessories={handleSetAccessories}
             responsibles={responsibles}
             setResponsibles={handleSetResponsibles}
@@ -226,17 +294,48 @@ function App() {
         )
       case 'part-sales':
         return (
-          <PartSales 
-            movements={movements} 
-            accessories={accessories} 
-            responsibles={responsibles} 
+          <PartSales
+            movements={movements}
+            accessories={accessories}
+            responsibles={responsibles}
             setMovements={handleSetMovements}
             currentUser={currentUser}
             showAlert={showAlert}
           />
         )
       case 'admin':
-        return <AdminPanel currentUser={currentUser} users={users} setUsers={handleSetUsers} setMovements={handleSetMovements} showAlert={showAlert} />
+        return (
+          <AdminPanel
+            currentUser={currentUser}
+            users={users}
+            setUsers={handleSetUsers}
+            setMovements={handleSetMovements}
+            showAlert={showAlert}
+          />
+        )
+      case 'orders':
+        return (
+          <Orders
+            orders={orders}
+            setOrders={handleSetOrders}
+            accessories={accessories}
+            responsibles={responsibles}
+            movements={movements}
+            setMovements={handleSetMovements}
+            currentUser={currentUser}
+            showAlert={showAlert}
+          />
+        )
+      case 'service-orders':
+        return (
+          <ServiceOrders
+            serviceOrders={serviceOrders}
+            setServiceOrders={handleSetServiceOrders}
+            accessories={accessories}
+            currentUser={currentUser}
+            showAlert={showAlert}
+          />
+        )
       default:
         return <Movements currentUser={currentUser} />
     }
@@ -246,9 +345,21 @@ function App() {
     return <Login onLogin={handleLogin} />
   }
 
+  const availableTabs = getAvailableTabs()
+
+  // Rol/setor para exibir no header
+  const getUserRoleLabel = () => {
+    if (currentUser.role === 'admin') return 'Administrador'
+    if (currentUser.sector === 'atendimento') return 'Atendimento'
+    return 'Estoque'
+  }
+
+  // Apenas Admin e Estoque têm acesso ao backup
+  const canAccessBackup = currentUser?.role === 'admin' || currentUser?.sector === 'estoque'
+
   return (
     <div className="app-container">
-      <ConfirmModal 
+      <ConfirmModal
         isOpen={confirmModal.isOpen}
         title={confirmModal.title}
         message={confirmModal.message}
@@ -257,8 +368,8 @@ function App() {
         onConfirm={confirmModal.onConfirm}
         onCancel={confirmModal.onCancel}
       />
-      
-      <ConfirmModal 
+
+      <ConfirmModal
         isOpen={alertConfig.isOpen}
         title={alertConfig.title}
         message={alertConfig.message}
@@ -268,6 +379,7 @@ function App() {
         onConfirm={() => setAlertConfig({ ...alertConfig, isOpen: false })}
         onCancel={() => setAlertConfig({ ...alertConfig, isOpen: false })}
       />
+
       <header>
         <div className="logo">
           <h1><span className="logo-text">ACESSÓRIOS</span> <span className="logo-pro">PRO</span></h1>
@@ -275,74 +387,117 @@ function App() {
         </div>
         <nav>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <button 
-              className={`nav-btn ${activeTab === 'movements' ? 'active' : ''}`}
-              onClick={() => setActiveTab('movements')}
-            >
-              <ClipboardList size={18} />
-              Movimentação
-            </button>
-            <button 
-              className={`nav-btn ${activeTab === 'catalog' ? 'active' : ''}`}
-              onClick={() => setActiveTab('catalog')}
-            >
-              <Database size={18} />
-              Catálogo
-            </button>
-            <button 
-              className={`nav-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
-              onClick={() => setActiveTab('dashboard')}
-            >
-              <LayoutDashboard size={18} />
-              Dashboard
-            </button>
-            <button 
-              className={`nav-btn ${activeTab === 'part-sales' ? 'active' : ''}`}
-              onClick={() => setActiveTab('part-sales')}
-            >
-              <ClipboardCheck size={18} />
-              Part Sales
-            </button>
-            {currentUser?.role === 'admin' && (
-              <button 
+            {availableTabs.includes('movements') && (
+              <button
+                className={`nav-btn ${activeTab === 'movements' ? 'active' : ''}`}
+                onClick={() => setActiveTab('movements')}
+              >
+                <ClipboardList size={18} />
+                <span className="nav-text">Movimentação</span>
+              </button>
+            )}
+            {availableTabs.includes('catalog') && (
+              <button
+                className={`nav-btn ${activeTab === 'catalog' ? 'active' : ''}`}
+                onClick={() => setActiveTab('catalog')}
+              >
+                <Database size={18} />
+                <span className="nav-text">Catálogo</span>
+              </button>
+            )}
+            {availableTabs.includes('dashboard') && (
+              <button
+                className={`nav-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
+                onClick={() => setActiveTab('dashboard')}
+              >
+                <LayoutDashboard size={18} />
+                <span className="nav-text">Dashboard</span>
+              </button>
+            )}
+            {availableTabs.includes('part-sales') && (
+              <button
+                className={`nav-btn ${activeTab === 'part-sales' ? 'active' : ''}`}
+                onClick={() => setActiveTab('part-sales')}
+              >
+                <ClipboardCheck size={18} />
+                <span className="nav-text">Part Sales</span>
+              </button>
+            )}
+            {availableTabs.includes('orders') && (
+              <button
+                className={`nav-btn ${activeTab === 'orders' ? 'active' : ''}`}
+                onClick={() => setActiveTab('orders')}
+              >
+                <Package size={18} />
+                <span className="nav-text">Pedidos</span>
+              </button>
+            )}
+            {availableTabs.includes('service-orders') && (
+              <button
+                className={`nav-btn ${activeTab === 'service-orders' ? 'active' : ''}`}
+                onClick={() => setActiveTab('service-orders')}
+              >
+                <FileText size={18} />
+                <span className="nav-text">Anexos OS</span>
+              </button>
+            )}
+            {availableTabs.includes('admin') && (
+              <button
                 className={`nav-btn ${activeTab === 'admin' ? 'active' : ''}`}
                 onClick={() => setActiveTab('admin')}
               >
                 <Shield size={18} />
-                Administração
+                <span className="nav-text">Administração</span>
               </button>
             )}
           </div>
-          
+
           <div className="header-actions">
-            <button className="btn-icon-secondary" title={theme === 'dark' ? 'Mudar para Tema Claro' : 'Mudar para Tema Escuro'} onClick={toggleTheme}>
+            <button
+              className="btn-icon-secondary"
+              title={theme === 'dark' ? 'Mudar para Tema Claro' : 'Mudar para Tema Escuro'}
+              onClick={toggleTheme}
+            >
               {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
               <span>{theme === 'dark' ? 'Claro' : 'Escuro'}</span>
             </button>
 
-            <button className="btn-icon-secondary" title="Exportar Backup JSON" onClick={exportBackup}>
-              <HardDriveDownload size={18} />
-              <span>Backup</span>
-            </button>
-            <button className="btn-icon-secondary" title="Importar Backup JSON" onClick={handleRestoreClick}>
-              <HardDriveUpload size={18} />
-              <span>Restaurar</span>
-            </button>
-            <input 
-              type="file" 
-              ref={fileInputRef}
-              accept=".json" 
-              onChange={importBackup} 
-              style={{ display: 'none' }} 
-            />
+            {/* Backup/Restaurar — apenas Admin e Estoque */}
+            {canAccessBackup && (
+              <>
+                <button className="btn-icon-secondary" title="Exportar Backup JSON" onClick={exportBackup}>
+                  <HardDriveDownload size={18} />
+                  <span>Backup</span>
+                </button>
+                <button className="btn-icon-secondary" title="Importar Backup JSON" onClick={handleRestoreClick}>
+                  <HardDriveUpload size={18} />
+                  <span>Restaurar</span>
+                </button>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  accept=".json"
+                  onChange={importBackup}
+                  style={{ display: 'none' }}
+                />
+              </>
+            )}
 
             <div className="user-profile">
-              <div className="user-logo" style={{ width: '32px', height: '32px', background: 'var(--bg-accent)', color: 'var(--accent)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div
+                className="user-logo"
+                style={{
+                  width: '32px', height: '32px',
+                  background: 'var(--bg-accent)', color: 'var(--accent)',
+                  borderRadius: '10px', display: 'flex',
+                  alignItems: 'center', justifyContent: 'center'
+                }}
+              >
                 <User size={18} />
               </div>
               <div className="user-info">
                 <span className="user-name">{currentUser.username}</span>
-                <span className="user-role">Sessão Ativa</span>
+                <span className="user-role">{getUserRoleLabel()}</span>
               </div>
               <button className="btn-logout" onClick={handleLogout} title="Sair da conta">
                 <LogOut size={18} />

@@ -134,6 +134,7 @@ export default function Login({ onLogin }) {
                 className="password-toggle"
                 onClick={() => setShowPassword(!showPassword)}
                 tabIndex="-1"
+                style={{ right: '25px', position: 'absolute' }}
               >
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>

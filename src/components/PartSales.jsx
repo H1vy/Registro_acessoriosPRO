@@ -31,7 +31,7 @@ export default function PartSales({ movements, setMovements, accessories, respon
 
   const handleCheckin = () => {
     const id = checkinModal.movementId
-    const updatedMovements = movements.map(m => 
+    setMovements(prev => prev.map(m => 
       m.id === id ? { 
         ...m, 
         checkin: {
@@ -39,8 +39,7 @@ export default function PartSales({ movements, setMovements, accessories, respon
           author: currentUser?.username || 'Sistema'
         }
       } : m
-    )
-    setMovements(updatedMovements)
+    ))
     setCheckinModal({ isOpen: false, movementId: null })
   }
 

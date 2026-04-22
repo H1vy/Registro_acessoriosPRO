@@ -3,6 +3,6 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
-  base: '/Registro_acessoriosPRO/',
+  base: './',
   // v1.0.2 - Force push to fix GH Pages blank screen
 })

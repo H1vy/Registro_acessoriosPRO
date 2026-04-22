@@ -36,34 +36,40 @@ export const subscribeToData = (storeName, callback) => {
   });
 };
 
-export const addRecord = async (storeName, record) => {
+export const updateRecord = async (storeName, id, updates) => {
   try {
-    const defaultData = await getAllData(storeName);
-    const newData = [...defaultData, record];
-    await set(ref(dbFB, storeName), newData);
-    return newData;
+    // Busca os dados atuais para encontrar o índice do item
+    const dbRef = ref(dbFB, storeName);
+    const snapshot = await get(dbRef);
+    let data = snapshot.val() || [];
+    
+    // Se for um array, encontramos o índice. Se for objeto, acessamos direto.
+    if (Array.isArray(data)) {
+      const index = data.findIndex(item => item && item.id === id);
+      if (index !== -1) {
+        data[index] = { ...data[index], ...updates };
+        await set(ref(dbFB, storeName), data);
+      }
+    } else {
+      // Se o Firebase transformou em objeto (chaves numéricas ou IDs)
+      const key = Object.keys(data).find(k => data[k].id === id);
+      if (key) {
+        await set(ref(dbFB, `${storeName}/${key}`), { ...data[key], ...updates });
+      }
+    }
+    console.log(`Registro ${id} atualizado em ${storeName}.`);
   } catch (error) {
-    console.error(`Erro ao adicionar em ${storeName}:`, error);
-    throw error;
-  }
-};
-
-export const deleteRecord = async (storeName, id) => {
-  try {
-    const defaultData = await getAllData(storeName);
-    const newData = defaultData.filter(item => item.id !== id);
-    await set(ref(dbFB, storeName), newData);
-    return newData;
-  } catch (error) {
-    console.error(`Erro ao apagar ${id} de ${storeName}:`, error);
+    console.error(`Erro ao atualizar ${id} em ${storeName}:`, error);
     throw error;
   }
 };
 
 export const saveData = async (storeName, data) => {
   try {
-    await set(ref(dbFB, storeName), data);
-    localStorage.setItem(storeName, JSON.stringify(data));
+    // Filtra nulos que o Firebase pode inserir ao deletar índices de array
+    const cleanData = Array.isArray(data) ? data.filter(i => i !== null) : data;
+    await set(ref(dbFB, storeName), cleanData);
+    localStorage.setItem(storeName, JSON.stringify(cleanData));
     console.log(`Dados sincronizados em Firebase e LocalStorage para ${storeName}.`);
   } catch (error) {
     console.error(`Erro ao salvar array em ${storeName}:`, error);
@@ -81,7 +87,8 @@ export const seedAdminUser = async () => {
         id: 'admin-id',
         username: 'Admin',
         password: 'Admin123',
-        role: 'admin'
+        role: 'admin',
+        sector: 'estoque'
       };
       
       const newUsers = [...users, adminUser];
@@ -92,5 +99,45 @@ export const seedAdminUser = async () => {
     }
   } catch (error) {
     console.error('Erro ao semear o Admin no Firebase:', error);
+  }
+};
+
+export const migrateUsersSector = async () => {
+  try {
+    const users = await getAllData('users');
+    const needsMigration = users.some(u => !u.sector);
+    
+    if (needsMigration) {
+      const migratedUsers = users.map(u => ({
+        ...u,
+        sector: u.sector || 'estoque'
+      }));
+      await set(ref(dbFB, 'users'), migratedUsers);
+      console.log('Migration de sector concluída: usuários existentes definidos como estoque');
+    } else {
+      console.log('Nenhum usuário precisa de migration de sector');
+    }
+  } catch (error) {
+    console.error('Erro ao executar migration de sector:', error);
+  }
+};
+
+// Funções exclusivas para Ordens de Serviço (OS) com Base64
+export const saveServiceOrderContent = async (id, base64) => {
+  try {
+    await set(ref(dbFB, `service_order_content/${id}`), base64);
+  } catch (error) {
+    console.error(`Erro ao salvar conteúdo da OS ${id}:`, error);
+    throw error;
+  }
+};
+
+export const getServiceOrderContent = async (id) => {
+  try {
+    const snapshot = await get(ref(dbFB, `service_order_content/${id}`));
+    return snapshot.exists() ? snapshot.val() : null;
+  } catch (error) {
+    console.error(`Erro ao obter conteúdo da OS ${id}:`, error);
+    return null;
   }
 };
