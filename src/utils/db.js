@@ -77,6 +77,28 @@ export const saveData = async (storeName, data) => {
   }
 };
 
+export const addRecord = async (storeName, record) => {
+  try {
+    const data = await getAllData(storeName);
+    const newData = [...data, record];
+    await saveData(storeName, newData);
+  } catch (error) {
+    console.error(`Erro ao adicionar record em ${storeName}:`, error);
+    throw error;
+  }
+};
+
+export const deleteRecord = async (storeName, id) => {
+  try {
+    const data = await getAllData(storeName);
+    const newData = data.filter(item => item && item.id !== id);
+    await saveData(storeName, newData);
+  } catch (error) {
+    console.error(`Erro ao deletar record ${id} em ${storeName}:`, error);
+    throw error;
+  }
+};
+
 export const seedAdminUser = async () => {
   try {
     let users = await getAllData('users');
