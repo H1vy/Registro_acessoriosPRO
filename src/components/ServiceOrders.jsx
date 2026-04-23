@@ -16,7 +16,10 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
     value: '',
     file: null,
     fileName: '',
-    withdrawalDate: new Date().toLocaleDateString('sv-SE') // Data da retirada/saída
+    withdrawalDate: (() => {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    })()
   });
   const [currentDelivery, setCurrentDelivery] = useState('');
   const [tempSelectedCode, setTempSelectedCode] = useState(''); // Código selecionado pendente de delivery
@@ -137,6 +140,7 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
       clientPhone,
       items,
       value,
+      withdrawalDate,
       status: 'pendente', // pendente, corrigido, anulado, removido
       attachedBy: currentUser.username,
       attachedAt: new Date().toISOString(),
@@ -156,7 +160,9 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
       const reconciledMovementIds = new Set(); 
 
       items.forEach(item => {
-        const accessory = accessories.find(a => a.factoryCode === item.code);
+        const accessory = accessories.find(a => 
+          (a.factoryCode || '').trim().toLowerCase() === (item.code || '').trim().toLowerCase()
+        );
         if (!accessory) return;
 
         const matchIdx = updatedMovements.findIndex((m) => {
@@ -164,9 +170,13 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
             return false;
           }
 
-          const mDate = m.timestamp ? m.timestamp.split('T')[0] : null;
+          let mDate = null;
+          if (m.timestamp) {
+            const d = new Date(m.timestamp);
+            mDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+          }
           if (mDate !== withdrawalDate) return false;
-          if (m.accessoryId !== accessory.id) return false;
+          if (String(m.accessoryId) !== String(accessory.id)) return false;
 
           const osInHistory = m.soNumber ? String(m.soNumber).trim().toLowerCase() : 's/n';
           const osInForm = osNumber ? String(osNumber).trim().toLowerCase() : 's/n';
@@ -635,7 +645,12 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
               <div className="os-card-attachment">
                 <div className="audit-info-compact">
                   <span className="user">Por: {o.attachedBy}</span>
-                  <span className="date">{new Date(o.attachedAt).toLocaleString('pt-BR')}</span>
+                  <span className="date">Anexado em: {new Date(o.attachedAt).toLocaleString('pt-BR')}</span>
+                  {o.withdrawalDate && (
+                    <span className="date" style={{ color: 'var(--primary-color)', fontWeight: 'bold' }}>
+                      Data Ref: {o.withdrawalDate.split('-').reverse().join('/')}
+                    </span>
+                  )}
                 </div>
                 <div className="attachment-btns">
                   <button 
@@ -780,6 +795,9 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
                     value={newOrder.withdrawalDate}
                     onChange={(e) => setNewOrder({...newOrder, withdrawalDate: e.target.value})}
                   />
+                  <span style={{ fontSize: '0.75rem', color: 'var(--primary-color)', marginTop: '4px', opacity: 0.8 }}>
+                    Esta data será usada para localizar e abater a pendência.
+                  </span>
                 </div>
               </div>
               <div className="grid-2">

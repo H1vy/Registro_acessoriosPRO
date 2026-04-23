@@ -73,8 +73,11 @@ function App() {
       const reconciledMovements = movements.map(m => {
         if (m.type !== 'checkout' || m.annulled) return m;
         
-        // Garantir consistência absoluta na data extraindo diretamente da string ISO
-        const mDate = m.timestamp ? m.timestamp.split('T')[0] : null;
+        let mDate = null;
+        if (m.timestamp) {
+          const d = new Date(m.timestamp);
+          mDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        }
         
         const acc = accessories.find(a => String(a.id) === String(m.accessoryId));
         const mOS = m.soNumber && m.soNumber !== '-' && m.soNumber !== 'S/N' ? String(m.soNumber).trim().toLowerCase() : null;
@@ -481,7 +484,12 @@ function App() {
               >
                 <ClipboardList size={20} />
                 <span className="nav-text">Movimentação</span>
-                {movements.filter(m => m.type === 'checkout' && !m.annulled && m.attachmentStatus !== 'ok' && (m.timestamp && m.timestamp.split('T')[0] >= '2026-04-22')).length > 0 && (
+                {movements.filter(m => {
+                  if (m.type !== 'checkout' || m.annulled || m.attachmentStatus === 'ok' || !m.timestamp) return false;
+                  const d = new Date(m.timestamp);
+                  const mDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                  return mDate >= '2026-04-22';
+                }).length > 0 && (
                   <span className="tab-notification-badge" />
                 )}
               </button>
@@ -534,7 +542,12 @@ function App() {
               >
                 <FileText size={20} />
                 <span className="nav-text">Anexos OS</span>
-                {movements.filter(m => m.type === 'checkout' && !m.annulled && m.attachmentStatus !== 'ok' && (m.timestamp && m.timestamp.split('T')[0] >= '2026-04-22')).length > 0 && (
+                {movements.filter(m => {
+                  if (m.type !== 'checkout' || m.annulled || m.attachmentStatus === 'ok' || !m.timestamp) return false;
+                  const d = new Date(m.timestamp);
+                  const mDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                  return mDate >= '2026-04-22';
+                }).length > 0 && (
                   <span className="tab-notification-badge" />
                 )}
               </button>
@@ -622,12 +635,12 @@ function App() {
 
 function PendingNotifications({ movements, accessories, setActiveTab }) {
   const [isOpen, setIsOpen] = useState(false);
-  const pending = movements.filter(m => 
-    m.type === 'checkout' && 
-    !m.annulled && 
-    m.attachmentStatus !== 'ok' &&
-    (m.timestamp && m.timestamp.split('T')[0] >= '2026-04-22')
-  );
+  const pending = movements.filter(m => {
+    if (m.type !== 'checkout' || m.annulled || m.attachmentStatus === 'ok' || !m.timestamp) return false;
+    const d = new Date(m.timestamp);
+    const mDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    return mDate >= '2026-04-22';
+  });
   
   // Debug para acompanhar o estado
   console.log(`[Notificações] Total Pendentes: ${pending.length}`);
