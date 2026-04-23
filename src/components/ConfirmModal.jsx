@@ -29,7 +29,7 @@ export default function ConfirmModal({
   const isSuccess = type === 'success';
 
   return (
-    <div className="modal-backdrop" style={{ zIndex: 10000 }}>
+    <div className="modal-backdrop">
       <div 
         className="modal-card" 
         style={{ 

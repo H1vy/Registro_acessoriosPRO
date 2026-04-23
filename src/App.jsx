@@ -12,7 +12,7 @@ import ConfirmModal from './components/ConfirmModal'
 import Orders from './components/Orders'
 import ServiceOrders from './components/ServiceOrders'
 import { getAllData, saveData, seedAdminUser, subscribeToData, migrateUsersSector } from './utils/db'
-import { LogOut, User, Shield, Sun, Moon, FileText } from 'lucide-react'
+import { LogOut, User, Shield, Sun, Moon, FileText, Bell, X } from 'lucide-react'
 
 function App() {
   const [activeTab, setActiveTab] = useState('movements')
@@ -51,6 +51,81 @@ function App() {
       setActiveTab(tabs[0])
     }
   }, [currentUser])
+
+  // Motor de Conciliação por Saldo (Quantidade Compatível)
+  useEffect(() => {
+    if (movements.length > 0 && currentUser) {
+      const today = new Date().toLocaleDateString('sv-SE');
+      
+      // 1. Criamos um "Pool" único de todos os itens de anexos disponíveis
+      let availableAttachments = [];
+      serviceOrders.filter(so => !so.annulled && !so.hidden).forEach(so => {
+        (so.items || []).forEach(item => {
+          availableAttachments.push({
+            ...so,
+            itemCode: item.code,
+            dateKey: so.withdrawalDate || (so.attachedAt ? so.attachedAt.split('T')[0] : null)
+          });
+        });
+      });
+
+      let changed = false;
+      const reconciledMovements = movements.map(m => {
+        if (m.type !== 'checkout' || m.annulled) return m;
+        
+        // Garantir consistência absoluta na data extraindo diretamente da string ISO
+        const mDate = m.timestamp ? m.timestamp.split('T')[0] : null;
+        
+        const acc = accessories.find(a => String(a.id) === String(m.accessoryId));
+        const mOS = m.soNumber && m.soNumber !== '-' && m.soNumber !== 'S/N' ? String(m.soNumber).trim().toLowerCase() : null;
+        const mCode = acc?.factoryCode ? String(acc.factoryCode).trim().toLowerCase() : null;
+
+        // 2. Tenta encontrar o melhor par (Data + Código + O.S.)
+        let matchIndex = -1;
+        
+        if (mCode && mDate) {
+          matchIndex = availableAttachments.findIndex(a => {
+            const aOS = a.osNumber ? String(a.osNumber).trim().toLowerCase() : null;
+            const aCode = a.itemCode ? String(a.itemCode).trim().toLowerCase() : null;
+            const aDate = a.dateKey; // Já está em formato sv-SE (YYYY-MM-DD)
+
+            // Critério 1: Data deve ser idêntica
+            if (aDate !== mDate) return false;
+
+            // Critério 2: Código deve ser idêntico
+            if (aCode !== mCode) return false;
+
+            // Critério 3: O.S.
+            if (mOS) {
+              // Se a saída tem O.S., o anexo DEVE ter a mesma O.S.
+              return aOS === mOS;
+            } else {
+              // Se a saída é S/N, aceitamos qualquer anexo (S/N ou com O.S.) do mesmo dia e código
+              // Pois o usuário pode ter dado saída S/N e depois criado anexo com O.S.
+              return true;
+            }
+          });
+        }
+
+        let targetStatus = matchIndex !== -1 ? 'ok' : 'pending';
+
+        // 3. Se achou, remove do pool para que não seja usado novamente (Mapeamento 1:1)
+        if (matchIndex !== -1) {
+          availableAttachments.splice(matchIndex, 1);
+        }
+
+        if (m.attachmentStatus !== targetStatus) {
+          changed = true;
+          return { ...m, attachmentStatus: targetStatus };
+        }
+        return m;
+      });
+
+      if (changed) {
+        handleSetMovements(reconciledMovements);
+      }
+    }
+  }, [movements, serviceOrders, accessories, currentUser]);
 
   useEffect(() => {
     seedAdminUser()
@@ -332,12 +407,23 @@ function App() {
             serviceOrders={serviceOrders}
             setServiceOrders={handleSetServiceOrders}
             accessories={accessories}
+            movements={movements}
+            setMovements={handleSetMovements}
             currentUser={currentUser}
             showAlert={showAlert}
           />
         )
       default:
-        return <Movements currentUser={currentUser} />
+        return (
+          <Movements
+            movements={movements}
+            accessories={accessories}
+            responsibles={responsibles}
+            setMovements={handleSetMovements}
+            currentUser={currentUser}
+            showAlert={showAlert}
+          />
+        )
     }
   }
 
@@ -389,19 +475,24 @@ function App() {
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             {availableTabs.includes('movements') && (
               <button
-                className={`nav-btn ${activeTab === 'movements' ? 'active' : ''}`}
+                className={`nav-btn ${activeTab === 'movements' ? 'active' : ''} relative`}
                 onClick={() => setActiveTab('movements')}
+                title="Movimentação"
               >
-                <ClipboardList size={18} />
+                <ClipboardList size={20} />
                 <span className="nav-text">Movimentação</span>
+                {movements.filter(m => m.type === 'checkout' && !m.annulled && m.attachmentStatus !== 'ok' && (m.timestamp && m.timestamp.split('T')[0] >= '2026-04-22')).length > 0 && (
+                  <span className="tab-notification-badge" />
+                )}
               </button>
             )}
             {availableTabs.includes('catalog') && (
               <button
                 className={`nav-btn ${activeTab === 'catalog' ? 'active' : ''}`}
                 onClick={() => setActiveTab('catalog')}
+                title="Catálogo"
               >
-                <Database size={18} />
+                <Database size={20} />
                 <span className="nav-text">Catálogo</span>
               </button>
             )}
@@ -409,8 +500,9 @@ function App() {
               <button
                 className={`nav-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
                 onClick={() => setActiveTab('dashboard')}
+                title="Dashboard"
               >
-                <LayoutDashboard size={18} />
+                <LayoutDashboard size={20} />
                 <span className="nav-text">Dashboard</span>
               </button>
             )}
@@ -418,8 +510,9 @@ function App() {
               <button
                 className={`nav-btn ${activeTab === 'part-sales' ? 'active' : ''}`}
                 onClick={() => setActiveTab('part-sales')}
+                title="Part Sales"
               >
-                <ClipboardCheck size={18} />
+                <ClipboardCheck size={20} />
                 <span className="nav-text">Part Sales</span>
               </button>
             )}
@@ -427,32 +520,45 @@ function App() {
               <button
                 className={`nav-btn ${activeTab === 'orders' ? 'active' : ''}`}
                 onClick={() => setActiveTab('orders')}
+                title="Pedidos"
               >
-                <Package size={18} />
+                <Package size={20} />
                 <span className="nav-text">Pedidos</span>
               </button>
             )}
             {availableTabs.includes('service-orders') && (
               <button
-                className={`nav-btn ${activeTab === 'service-orders' ? 'active' : ''}`}
+                className={`nav-btn ${activeTab === 'service-orders' ? 'active' : ''} relative`}
                 onClick={() => setActiveTab('service-orders')}
+                title="Anexos OS"
               >
-                <FileText size={18} />
+                <FileText size={20} />
                 <span className="nav-text">Anexos OS</span>
+                {movements.filter(m => m.type === 'checkout' && !m.annulled && m.attachmentStatus !== 'ok' && (m.timestamp && m.timestamp.split('T')[0] >= '2026-04-22')).length > 0 && (
+                  <span className="tab-notification-badge" />
+                )}
               </button>
             )}
             {availableTabs.includes('admin') && (
               <button
                 className={`nav-btn ${activeTab === 'admin' ? 'active' : ''}`}
                 onClick={() => setActiveTab('admin')}
+                title="Admin"
               >
                 <Shield size={18} />
-                <span className="nav-text">Administração</span>
+                <span className="nav-text">Admin</span>
               </button>
             )}
           </div>
 
           <div className="header-actions">
+            {/* Central de Notificações de Anexos Pendentes */}
+            <PendingNotifications 
+              movements={movements} 
+              accessories={accessories}
+              setActiveTab={setActiveTab}
+            />
+
             <button
               className="btn-icon-secondary"
               title={theme === 'dark' ? 'Mudar para Tema Claro' : 'Mudar para Tema Escuro'}
@@ -512,6 +618,70 @@ function App() {
       </main>
     </div>
   )
+}
+
+function PendingNotifications({ movements, accessories, setActiveTab }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const pending = movements.filter(m => 
+    m.type === 'checkout' && 
+    !m.annulled && 
+    m.attachmentStatus !== 'ok' &&
+    (m.timestamp && m.timestamp.split('T')[0] >= '2026-04-22')
+  );
+  
+  // Debug para acompanhar o estado
+  console.log(`[Notificações] Total Pendentes: ${pending.length}`);
+
+  return (
+    <div className="notification-container">
+      <button 
+        className={`btn-icon-secondary notification-bell ${pending.length > 0 ? 'has-pending' : ''}`} 
+        onClick={() => setIsOpen(!isOpen)}
+        title="Central de Pendências"
+        style={{ opacity: pending.length === 0 ? 0.3 : 1 }}
+      >
+        <Bell size={20} />
+        {pending.length > 0 && <span className="badge-notification">{pending.length}</span>}
+      </button>
+
+      {isOpen && pending.length > 0 && (
+        <div className="notification-dropdown glass-effect">
+          <div className="notification-header">
+            <h4>Anexos Pendentes</h4>
+            <button className="btn-close-mini" onClick={() => setIsOpen(false)}><X size={14} /></button>
+          </div>
+          <div className="notification-list custom-scrollbar">
+            {pending.map(m => {
+              const acc = accessories.find(a => a.id === m.accessoryId);
+              return (
+                <div key={m.id} className="notification-item" onClick={() => { setActiveTab('service-orders'); setIsOpen(false); }}>
+                  <div className="notif-info">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div className="notif-icon-wrapper">
+                        <FileText size={14} />
+                      </div>
+                      <span className="notif-code">{acc?.factoryCode || '??'}</span>
+                    </div>
+                    <span className="notif-date">{new Date(m.timestamp).toLocaleDateString('pt-BR')}</span>
+                  </div>
+                  <div className="notif-desc">O.S: {m.soNumber || 'S/N'}</div>
+                </div>
+              );
+            })}
+          </div>
+          <button className="btn-view-all" onClick={() => { setActiveTab('service-orders'); setIsOpen(false); }}>
+            Ir para Anexos
+          </button>
+        </div>
+      )}
+
+      {isOpen && pending.length === 0 && (
+        <div className="notification-dropdown glass-effect" style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
+          Tudo em dia! Nenhuma pendência encontrada.
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default App

@@ -37,7 +37,8 @@ export default function Movements({ movements, setMovements, accessories, respon
       timestamp: new Date().toISOString(),
       author: currentUser?.username || 'Sistema',
       annulled: false,
-      checkin: null // Para a futura aba Pate sales
+      checkin: null,
+      attachmentStatus: 'pending' // Novo status inicial para conciliação
     }
 
     setMovements(prev => [newMovement, ...prev])
@@ -190,6 +191,17 @@ export default function Movements({ movements, setMovements, accessories, respon
         at: m.checkin.timestamp,
         by: m.checkin.author,
         desc: 'Produto validado pelo setor responsável.'
+      })
+    }
+
+    // 5. Registro de Anexo (Conciliação)
+    if (m.attachmentStatus === 'ok' && m.attachedAt) {
+      log.push({
+        type: 'checkin', // Reaproveitando estilo de checkin (verde/ok)
+        label: 'Anexo Vinculado',
+        at: m.attachedAt,
+        by: m.attachedBy || 'Sistema',
+        desc: `Documento de comprovante validado e vinculado à O.S: ${m.soNumber || 'S/N'}`
       })
     }
 
@@ -439,7 +451,14 @@ export default function Movements({ movements, setMovements, accessories, respon
                     </div>
                   </td>
                   <td style={{ fontWeight: 600 }}>{getResponsibleName(m.responsibleId)}</td>
-                  <td><code style={{ background: 'var(--bg-input)', padding: '2px 8px', borderRadius: '4px', fontSize: '0.8rem', border: '1px solid var(--border)' }}>{m.soNumber || '-'}</code></td>
+                  <td>
+                    <code className={`
+                      ${m.attachmentStatus === 'ok' ? 'os-code-linked' : 'os-code-standard'} 
+                      ${(m.attachmentStatus !== 'ok' && m.soNumber && m.soNumber !== '-') ? 'os-code-pulse' : ''}
+                    `}>
+                      {m.soNumber || '-'}
+                    </code>
+                  </td>
                   <td>
                     <div className="badge badge-author">
                       <User size={12} /> {m.author || 'Sistema'}

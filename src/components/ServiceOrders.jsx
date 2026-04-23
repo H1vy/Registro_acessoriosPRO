@@ -4,17 +4,19 @@ import * as XLSX from 'xlsx';
 import { saveServiceOrderContent, getServiceOrderContent } from '../utils/db';
 import ConfirmModal from './ConfirmModal';
 
-const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, currentUser, showAlert }) => {
+const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements, setMovements, currentUser, showAlert }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [viewingPdf, setViewingPdf] = useState(null); // Estado para o popup do PDF
   const [searchTerm, setSearchTerm] = useState('');
   const [newOrder, setNewOrder] = useState({
     osNumber: '',
     clientName: '',
+    clientPhone: '',
     items: [], // Array de objetos { code, delivery }
     value: '',
     file: null,
-    fileName: ''
+    fileName: '',
+    withdrawalDate: new Date().toLocaleDateString('sv-SE') // Data da retirada/saída
   });
   const [currentDelivery, setCurrentDelivery] = useState('');
   const [tempSelectedCode, setTempSelectedCode] = useState(''); // Código selecionado pendente de delivery
@@ -42,6 +44,7 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, currentUs
   const [editingOrder, setEditingOrder] = useState(null);
   const [alertHistoryModal, setAlertHistoryModal] = useState({ isOpen: false, order: null });
   const [statusFilter, setStatusFilter] = useState(null); // Estado para filtrar por status (Regulares, Pendentes, etc)
+  const [dateFilter, setDateFilter] = useState(new Date().toLocaleDateString('sv-SE')); // Filtro por data de anexo (Padrão: Hoje)
 
   // Fechar dropdown ao clicar fora
   useEffect(() => {
@@ -110,10 +113,19 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, currentUs
   };
 
   const handleSaveOrder = async () => {
-    const { osNumber, clientName, items, value, file } = newOrder;
+    const { osNumber, clientName, clientPhone, items, value, file, withdrawalDate } = newOrder;
 
-    if (!osNumber || !clientName || items.length === 0 || !value || !file) {
-      showAlert('Atenção', 'Preencha todos os campos, adicione pelo menos um par (Código + Delivery) e anexe o PDF.', 'warning');
+    // Validação detalhada
+    const missingFields = [];
+    if (!osNumber) missingFields.push("N° da O.S.");
+    if (!clientName) missingFields.push("Nome do Cliente");
+    if (!clientPhone) missingFields.push("Telefone do Cliente");
+    if (items.length === 0) missingFields.push("Pelo menos um item (Peça)");
+    if (!value || value === 'R$ 0,00') missingFields.push("Valor da Venda");
+    if (!file) missingFields.push("Arquivo PDF");
+
+    if (missingFields.length > 0) {
+      showAlert('Campos Obrigatórios', `Por favor, preencha: ${missingFields.join(', ')}`, 'warning');
       return;
     }
 
@@ -122,6 +134,7 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, currentUs
       id: orderId,
       osNumber,
       clientName,
+      clientPhone,
       items,
       value,
       status: 'pendente', // pendente, corrigido, anulado, removido
@@ -134,12 +147,60 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, currentUs
 
     try {
       await saveServiceOrderContent(orderId, file);
-      setServiceOrders(prev => [...prev, orderData]);
+      
+      
+      // Lógica de Reconciliação (Vinculação automática com Movimentações)
+      const updatedMovements = [...movements];
+      let reconciledCount = 0;
+
+      const reconciledMovementIds = new Set(); 
+
+      items.forEach(item => {
+        const accessory = accessories.find(a => a.factoryCode === item.code);
+        if (!accessory) return;
+
+        const matchIdx = updatedMovements.findIndex((m) => {
+          if (m.type !== 'checkout' || m.annulled || m.attachmentStatus === 'ok' || reconciledMovementIds.has(m.id)) {
+            return false;
+          }
+
+          const mDate = m.timestamp ? m.timestamp.split('T')[0] : null;
+          if (mDate !== withdrawalDate) return false;
+          if (m.accessoryId !== accessory.id) return false;
+
+          const osInHistory = m.soNumber ? String(m.soNumber).trim().toLowerCase() : 's/n';
+          const osInForm = osNumber ? String(osNumber).trim().toLowerCase() : 's/n';
+
+          if (osInHistory === 's/n' || osInHistory === osInForm) {
+            return true;
+          }
+          return false;
+        });
+
+        if (matchIdx !== -1) {
+          const m = updatedMovements[matchIdx];
+          updatedMovements[matchIdx] = {
+            ...m,
+            attachmentStatus: 'ok',
+            attachmentId: orderId,
+            attachedAt: new Date().toISOString(),
+            attachedBy: currentUser.username
+          };
+          reconciledMovementIds.add(m.id);
+          reconciledCount++;
+        }
+      });
+
+      if (reconciledCount > 0) {
+        setMovements(updatedMovements);
+      }
+
+      setServiceOrders(prev => [orderData, ...prev]);
       setIsModalOpen(false);
-      setNewOrder({ osNumber: '', clientName: '', items: [], value: '', file: null, fileName: '' });
+      setNewOrder({ osNumber: '', clientName: '', clientPhone: '', items: [], value: '', file: null, fileName: '', withdrawalDate: new Date().toLocaleDateString('sv-SE') });
       setCurrentDelivery('');
       setTempSelectedCode('');
-      showAlert('Sucesso', 'Ordem de Serviço anexada com sucesso!', 'success');
+      showAlert('Sucesso', `Ordem de Serviço anexada e ${reconciledCount} itens vinculados!`, 'success');
     } catch (error) {
       showAlert('Erro', 'Falha ao salvar o arquivo.', 'danger');
     }
@@ -151,8 +212,17 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, currentUs
   };
 
   const handleUpdateOrder = async () => {
-    if (!editingOrder.osNumber || !editingOrder.clientName || editingOrder.items.length === 0 || !editingOrder.value) {
-      showAlert('Atenção', 'Preencha todos os campos obrigatórios.', 'warning');
+    const { osNumber, clientName, clientPhone, items, value } = editingOrder;
+
+    const missingFields = [];
+    if (!osNumber) missingFields.push("N° da O.S.");
+    if (!clientName) missingFields.push("Nome do Cliente");
+    if (!clientPhone) missingFields.push("Telefone do Cliente");
+    if (items.length === 0) missingFields.push("Pelo menos um item");
+    if (!value || value === 'R$ 0,00') missingFields.push("Valor da Venda");
+
+    if (missingFields.length > 0) {
+      showAlert('Campos Obrigatórios', `Por favor, preencha: ${missingFields.join(', ')}`, 'warning');
       return;
     }
 
@@ -369,7 +439,13 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, currentUs
         if (details.label !== filterMap[statusFilter]) return false;
       }
 
-      // 3. Filtro de Busca Texto
+       // 3. Filtro de Data
+      if (dateFilter) {
+        const orderDate = new Date(o.attachedAt).toLocaleDateString('sv-SE');
+        if (orderDate !== dateFilter) return false;
+      }
+
+      // 4. Filtro de Busca Texto
       const searchLower = searchTerm.toLowerCase();
       return (
         o.osNumber.toLowerCase().includes(searchLower) || 
@@ -385,6 +461,7 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, currentUs
   const canCheckIn = currentUser.role === 'admin' || currentUser.sector === 'estoque' || currentUser.sector === 'Estoque';
   const isAdmin = currentUser.role === 'admin';
   const canManage = currentUser.role === 'admin' || currentUser.sector === 'atendimento';
+  const canAlertError = currentUser.role === 'admin' || currentUser.sector === 'estoque' || currentUser.sector === 'Estoque';
 
   return (
     <div className="orders-container">
@@ -466,8 +543,8 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, currentUs
         })}
       </div>
 
-      <div className="search-bar-container">
-        <div className="search-input">
+       <div className="search-bar-container" style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+        <div className="search-input" style={{ flex: 1, minWidth: '250px' }}>
           <Search size={18} />
           <input 
             type="text" 
@@ -476,6 +553,47 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, currentUs
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
+
+        <div className="date-filter-wrapper" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: 'rgba(255,255,255,0.03)', padding: '0.5rem 1rem', borderRadius: '12px', border: '1px solid var(--border)' }}>
+          <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Filtrar por Data:</label>
+          <input 
+            type="date" 
+            value={dateFilter}
+            onChange={(e) => setDateFilter(e.target.value)}
+            style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', outline: 'none', fontSize: '0.85rem' }}
+          />
+          <button 
+            className="btn-today"
+            style={{ 
+              background: 'rgba(56, 189, 248, 0.1)', 
+              border: '1px solid rgba(56, 189, 248, 0.2)', 
+              color: 'var(--accent)', 
+              fontSize: '0.7rem', 
+              fontWeight: 800, 
+              padding: '2px 8px', 
+              borderRadius: '6px', 
+              cursor: 'pointer',
+              textTransform: 'uppercase'
+            }}
+            onClick={() => setDateFilter(new Date().toLocaleDateString('sv-SE'))}
+          >
+            Hoje
+          </button>
+        </div>
+
+        {(searchTerm || dateFilter || statusFilter) && (
+          <button 
+            className="btn-text" 
+            style={{ color: '#ef4444', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', padding: '0.5rem 1rem', background: 'rgba(239, 68, 68, 0.05)', borderRadius: '10px' }}
+            onClick={() => {
+              setSearchTerm('');
+              setDateFilter('');
+              setStatusFilter(null);
+            }}
+          >
+            <X size={16} /> Limpar Filtros
+          </button>
+        )}
       </div>
 
       <div className="os-cards-list">
@@ -505,6 +623,11 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, currentUs
                     </span>
                   ))}
                 </div>
+                {o.clientPhone && (
+                  <div className="os-card-phone" style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: '4px 0', opacity: 0.8 }}>
+                    📞 {o.clientPhone}
+                  </div>
+                )}
                 <div className="os-card-value">Venda: {o.value}</div>
               </div>
 
@@ -515,7 +638,11 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, currentUs
                   <span className="date">{new Date(o.attachedAt).toLocaleString('pt-BR')}</span>
                 </div>
                 <div className="attachment-btns">
-                  <button className="btn-action-icon" title="Ver PDF" onClick={() => handleViewPdf(o.id)}>
+                  <button 
+                    className="btn-action-icon" 
+                    title="Ver PDF" 
+                    onClick={() => handleViewPdf(o.id)}
+                  >
                     <Eye size={18} />
                   </button>
                   <button className="btn-action-icon" title="Baixar" onClick={() => handleDownloadPdf(o.id, o.osNumber)}>
@@ -570,13 +697,15 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, currentUs
               {/* Ações de Gestão */}
               <div className="os-card-actions">
                 <div className="action-group">
-                  <button 
-                    className="btn-icon-warning" 
-                    title="Alertar Erro" 
-                    onClick={() => setAlertModal({ isOpen: true, orderId: o.id })}
-                  >
-                    <AlertCircle size={18} />
-                  </button>
+                  {canAlertError && (
+                    <button 
+                      className="btn-icon-warning" 
+                      title="Alertar Erro" 
+                      onClick={() => setAlertModal({ isOpen: true, orderId: o.id })}
+                    >
+                      <AlertCircle size={18} />
+                    </button>
+                  )}
 
                   {o.alerts?.some(a => a.status === 'ativo') && canManage && (
                     <button 
@@ -625,7 +754,7 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, currentUs
 
       {isModalOpen && (
         <div className="modal-backdrop">
-          <div className="modal-card" style={{ maxWidth: '480px' }}>
+          <div className="modal-card">
             <button className="modal-close-btn" onClick={() => setIsModalOpen(false)}>
               <X size={24} />
             </button>
@@ -633,25 +762,48 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, currentUs
               <h3>Novo Anexo de OS</h3>
               <p>Preencha os dados da venda e anexe o arquivo PDF</p>
             </div>
-            <div className="modal-body" style={{ marginTop: '2rem' }}>
-              <div className="input-group">
-                <label>N° da Ordem de Serviço (Título)</label>
-                <input 
-                  type="text" 
-                  value={newOrder.osNumber}
-                  onChange={(e) => setNewOrder({...newOrder, osNumber: e.target.value})}
-                  placeholder="Ex: 450982"
-                />
+            <div className="modal-body" style={{ marginTop: '1rem', paddingBottom: '4rem' }}>
+              <div className="grid-2">
+                <div className="input-group">
+                  <label>N° da Ordem de Serviço</label>
+                  <input 
+                    type="text" 
+                    value={newOrder.osNumber}
+                    onChange={(e) => setNewOrder({...newOrder, osNumber: e.target.value})}
+                    placeholder="Ex: 450982"
+                  />
+                </div>
+                <div className="input-group">
+                  <label>Data da Retirada (Saída)</label>
+                  <input 
+                    type="date" 
+                    value={newOrder.withdrawalDate}
+                    onChange={(e) => setNewOrder({...newOrder, withdrawalDate: e.target.value})}
+                  />
+                </div>
               </div>
-              <div className="input-group">
-                <label>Nome do Cliente</label>
-                <input 
-                  type="text" 
-                  value={newOrder.clientName}
-                  onChange={(e) => setNewOrder({...newOrder, clientName: e.target.value})}
-                />
+              <div className="grid-2">
+                <div className="input-group">
+                  <label>Nome do Cliente</label>
+                  <input 
+                    type="text" 
+                    value={newOrder.clientName}
+                    onChange={(e) => setNewOrder({...newOrder, clientName: e.target.value})}
+                    placeholder="Nome completo"
+                  />
+                </div>
+                <div className="input-group">
+                  <label>Telefone do Cliente (DDD + Número)</label>
+                  <input 
+                    type="text" 
+                    value={newOrder.clientPhone}
+                    onChange={(e) => setNewOrder({...newOrder, clientPhone: e.target.value.replace(/\D/g, '')})}
+                    placeholder="Ex: 11999999999"
+                    maxLength="11"
+                  />
+                </div>
               </div>
-              <div className="row paired-input-row" style={{ background: 'rgba(255,255,255,0.03)', padding: '1rem', borderRadius: '16px', marginBottom: '1.5rem', border: '1px solid rgba(255,255,255,0.05)' }}>
+              <div className="grid-2 paired-input-row" style={{ background: 'rgba(255,255,255,0.03)', padding: '1rem', borderRadius: '16px', marginBottom: '1.5rem', border: '1px solid rgba(255,255,255,0.05)', gap: '1rem' }}>
                 <div className="input-group" style={{ marginBottom: 0 }}>
                   <label>1. Selecione a Peça</label>
                   <div className="searchable-select-container" ref={accDropdownRef}>
@@ -896,7 +1048,7 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, currentUs
       {/* Modal de Edição de Registro */}
       {isEditModalOpen && editingOrder && (
         <div className="modal-backdrop">
-          <div className="modal-card" style={{ maxWidth: '520px' }}>
+          <div className="modal-card">
             <button className="modal-close-btn" onClick={() => setIsEditModalOpen(false)}>
               <X size={24} />
             </button>
@@ -904,25 +1056,48 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, currentUs
               <h3>Editar Registro de OS</h3>
               <p>Alterar informações básicas do registro</p>
             </div>
-            <div className="modal-body" style={{ marginTop: '2rem' }}>
-              <div className="input-group">
-                <label>N° da Ordem de Serviço</label>
-                <input 
-                  type="text" 
-                  value={editingOrder.osNumber}
-                  onChange={(e) => setEditingOrder({...editingOrder, osNumber: e.target.value})}
-                />
+            <div className="modal-body" style={{ marginTop: '1rem', paddingBottom: '4rem' }}>
+              <div className="grid-2">
+                <div className="input-group">
+                  <label>N° da Ordem de Serviço</label>
+                  <input 
+                    type="text" 
+                    value={editingOrder.osNumber}
+                    onChange={(e) => setEditingOrder({...editingOrder, osNumber: e.target.value})}
+                  />
+                </div>
+                <div className="input-group">
+                  <label>Valor Total</label>
+                  <input 
+                    type="text" 
+                    value={editingOrder.value}
+                    onChange={(e) => setEditingOrder({ ...editingOrder, value: formatCurrency(e.target.value) })}
+                  />
+                </div>
               </div>
-              <div className="input-group">
-                <label>Nome do Cliente</label>
-                <input 
-                  type="text" 
-                  value={editingOrder.clientName}
-                  onChange={(e) => setEditingOrder({...editingOrder, clientName: e.target.value})}
-                />
+
+              <div className="grid-2">
+                <div className="input-group">
+                  <label>Nome do Cliente</label>
+                  <input 
+                    type="text" 
+                    value={editingOrder.clientName}
+                    onChange={(e) => setEditingOrder({...editingOrder, clientName: e.target.value})}
+                  />
+                </div>
+                <div className="input-group">
+                  <label>Telefone do Cliente</label>
+                  <input 
+                    type="text" 
+                    value={editingOrder.clientPhone || ''}
+                    onChange={(e) => setEditingOrder({ ...editingOrder, clientPhone: e.target.value.replace(/\D/g, '') })}
+                    placeholder="Ex: 11999999999"
+                    maxLength="11"
+                  />
+                </div>
               </div>
               
-              <div className="row paired-input-row" style={{ background: 'rgba(255,255,255,0.03)', padding: '1rem', borderRadius: '16px', marginBottom: '1.5rem', border: '1px solid rgba(255,255,255,0.05)' }}>
+              <div className="grid-2 paired-input-row" style={{ background: 'rgba(255,255,255,0.03)', padding: '1rem', borderRadius: '16px', marginBottom: '1.5rem', border: '1px solid rgba(255,255,255,0.05)', gap: '1rem' }}>
                 <div className="input-group" style={{ marginBottom: 0 }}>
                   <label>Adicionar Peça</label>
                   <div className="searchable-select-container" ref={accDropdownRef}>

@@ -162,6 +162,13 @@ header {
   border-bottom: 1px solid rgba(255, 255, 255, 0.03);
   animation: slideDown 0.6s cubic-bezier(0.16, 1, 0.3, 1);
   gap: 4rem;
+  position: relative;
+  z-index: 1 !important; /* Camada base */
+}
+
+main.content {
+  position: relative;
+  z-index: 2 !important; /* Camada superior ao header */
 }
 
 @keyframes slideDown {
