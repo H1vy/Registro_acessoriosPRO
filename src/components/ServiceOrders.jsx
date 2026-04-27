@@ -22,6 +22,7 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
     })()
   });
   const [currentDelivery, setCurrentDelivery] = useState('');
+  const [currentQty, setCurrentQty] = useState(1); // Nova state para quantidade no form
   const [tempSelectedCode, setTempSelectedCode] = useState(''); // Código selecionado pendente de delivery
   const [isAccDropdownOpen, setIsAccDropdownOpen] = useState(false);
   const [accSearchTerm, setAccSearchTerm] = useState('');
@@ -56,7 +57,7 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
       if (accDropdownRef.current && !accDropdownRef.current.contains(event.target)) {
         setIsAccDropdownOpen(false);
       }
-      
+
       // Limpar filtro de status se clicar fora da área de KPIs
       if (statusFilter && kpiGridRef.current && !kpiGridRef.current.contains(event.target)) {
         // Opcional: verificar se o clique não foi em elementos que devem manter o filtro (ex: botões de ação)
@@ -71,8 +72,8 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
   const filteredAccessories = useMemo(() => {
     if (!accSearchTerm) return accessories;
     const lower = accSearchTerm.toLowerCase();
-    return accessories.filter(acc => 
-      acc.factoryCode.toLowerCase().includes(lower) || 
+    return accessories.filter(acc =>
+      acc.factoryCode.toLowerCase().includes(lower) ||
       acc.commercialName.toLowerCase().includes(lower)
     );
   }, [accessories, accSearchTerm]);
@@ -102,7 +103,7 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
         showAlert('Erro', 'O arquivo excede o limite de 2MB.', 'danger');
         return;
       }
-      
+
       const reader = new FileReader();
       reader.onload = (readerEvent) => {
         setNewOrder({
@@ -115,15 +116,108 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
     }
   };
 
+  // Função de Reconciliação (Vinculação automática) - Motor baseado em grupos
+  const performReconciliation = (movementsArray, orderId, items, withdrawalDate, osNumber) => {
+    let updatedMovements = [...movementsArray];
+
+    // Normaliza a OS do formulário (null = avulso/S/N)
+    const osInForm = (osNumber && String(osNumber).trim() !== '-' && String(osNumber).trim().toUpperCase() !== 'S/N')
+      ? String(osNumber).trim().toLowerCase() : null;
+
+    // 1. Pool de itens do PDF (código normalizado + quantidade)
+    const pdfPool = items.map(item => ({
+      code: String(item.code || '').trim().toLowerCase(),
+      quantity: Number(item.quantity || 1)
+    }));
+
+    // 2. Limpa vínculos anteriores desta O.S. para re-reconciliar do zero
+    updatedMovements = updatedMovements.map(m => {
+      if (m.attachmentId === orderId) {
+        return { ...m, attachmentStatus: 'pending', attachmentId: null, attachedAt: null, attachedBy: null };
+      }
+      return m;
+    });
+
+    // 3. Filtra e ordena os movimentos elegíveis cronologicamente
+    const movementResults = {};
+    const candidateMovements = updatedMovements.filter(m => {
+      if (m.isDeleted || (m.type && m.type !== 'checkout') || m.annulled) return false;
+      if (m.attachmentStatus === 'ok' && m.attachmentId && m.attachmentId !== orderId) return false;
+      if (!m.timestamp) return false;
+
+      const d = new Date(m.timestamp);
+      const mDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      return mDate === withdrawalDate;
+    }).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+    let availablePool = [...pdfPool];
+
+    // 4. Cada movimento é verificado INDIVIDUALMENTE pela sua própria quantidade.
+    //    Regra COM OS  → OS do movimento deve ser idêntica à OS do anexo
+    //    Regra AVULSO  → vincula por código + quantidade, ignora OS do anexo
+    candidateMovements.forEach(m => {
+      const mOS = (m.soNumber && String(m.soNumber).trim() !== '-' && String(m.soNumber).trim().toUpperCase() !== 'S/N' && String(m.soNumber).trim().toUpperCase() !== 'AVULSO')
+        ? String(m.soNumber).trim().toLowerCase() : null;
+
+      if (mOS !== null && mOS !== osInForm) {
+        // Movimento COM OS diferente da OS do anexo → sem vínculo
+        movementResults[m.id] = 'pending';
+        return;
+      }
+
+      const mCode = accessories.find(acc => String(acc.id) === String(m.accessoryId))?.factoryCode?.trim().toLowerCase();
+      if (!mCode) {
+        movementResults[m.id] = 'pending';
+        return;
+      }
+
+      const mQty = Number(m.quantity || 1);
+      
+      // Movimento COM OS igual à OS do anexo, OU AVULSO → vincula por código + qtd
+      const pdfIdx = availablePool.findIndex(p => p.code === mCode && p.quantity === mQty);
+      if (pdfIdx !== -1) {
+        availablePool.splice(pdfIdx, 1);
+        movementResults[m.id] = 'ok';
+      } else {
+        movementResults[m.id] = 'pending';
+      }
+    });
+
+    // 5. Aplica o resultado a cada movimento
+    updatedMovements = updatedMovements.map(m => {
+      const result = movementResults[m.id];
+      if (result === 'ok') {
+        return {
+          ...m,
+          attachmentStatus: 'ok',
+          attachmentId: orderId,
+          attachedAt: new Date().toISOString(),
+          attachedBy: currentUser.username
+        };
+      }
+      if (result === 'pending') {
+        return { ...m, attachmentStatus: 'pending', attachmentId: null };
+      }
+      return m;
+    });
+
+    return { updatedMovements, count: Object.values(movementResults).filter(r => r === 'ok').length };
+  };
+
+
+  const handleEdit = (order) => {
+    setEditingOrder({ ...order });
+    setIsEditModalOpen(true);
+  };
+
   const handleSaveOrder = async () => {
     const { osNumber, clientName, clientPhone, items, value, file, withdrawalDate } = newOrder;
 
-    // Validação detalhada
     const missingFields = [];
     if (!osNumber) missingFields.push("N° da O.S.");
     if (!clientName) missingFields.push("Nome do Cliente");
     if (!clientPhone) missingFields.push("Telefone do Cliente");
-    if (items.length === 0) missingFields.push("Pelo menos um item (Peça)");
+    if (items.length === 0) missingFields.push("Pelo menos um item");
     if (!value || value === 'R$ 0,00') missingFields.push("Valor da Venda");
     if (!file) missingFields.push("Arquivo PDF");
 
@@ -141,7 +235,7 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
       items,
       value,
       withdrawalDate,
-      status: 'pendente', // pendente, corrigido, anulado, removido
+      status: 'pendente',
       attachedBy: currentUser.username,
       attachedAt: new Date().toISOString(),
       checkIn: null,
@@ -151,78 +245,23 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
 
     try {
       await saveServiceOrderContent(orderId, file);
-      
-      
-      // Lógica de Reconciliação (Vinculação automática com Movimentações)
-      const updatedMovements = [...movements];
-      let reconciledCount = 0;
 
-      const reconciledMovementIds = new Set(); 
-
-      items.forEach(item => {
-        const accessory = accessories.find(a => 
-          (a.factoryCode || '').trim().toLowerCase() === (item.code || '').trim().toLowerCase()
-        );
-        if (!accessory) return;
-
-        const matchIdx = updatedMovements.findIndex((m) => {
-          if (m.type !== 'checkout' || m.annulled || m.attachmentStatus === 'ok' || reconciledMovementIds.has(m.id)) {
-            return false;
-          }
-
-          let mDate = null;
-          if (m.timestamp) {
-            const d = new Date(m.timestamp);
-            mDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-          }
-          if (mDate !== withdrawalDate) return false;
-          if (String(m.accessoryId) !== String(accessory.id)) return false;
-
-          const osInHistory = m.soNumber ? String(m.soNumber).trim().toLowerCase() : 's/n';
-          const osInForm = osNumber ? String(osNumber).trim().toLowerCase() : 's/n';
-
-          if (osInHistory === 's/n' || osInHistory === osInForm) {
-            return true;
-          }
-          return false;
-        });
-
-        if (matchIdx !== -1) {
-          const m = updatedMovements[matchIdx];
-          updatedMovements[matchIdx] = {
-            ...m,
-            attachmentStatus: 'ok',
-            attachmentId: orderId,
-            attachedAt: new Date().toISOString(),
-            attachedBy: currentUser.username
-          };
-          reconciledMovementIds.add(m.id);
-          reconciledCount++;
-        }
-      });
-
-      if (reconciledCount > 0) {
-        setMovements(updatedMovements);
-      }
+      const { updatedMovements, count } = performReconciliation(movements, orderId, items, withdrawalDate, osNumber);
+      if (count > 0) setMovements(updatedMovements);
 
       setServiceOrders(prev => [orderData, ...prev]);
       setIsModalOpen(false);
       setNewOrder({ osNumber: '', clientName: '', clientPhone: '', items: [], value: '', file: null, fileName: '', withdrawalDate: new Date().toLocaleDateString('sv-SE') });
       setCurrentDelivery('');
       setTempSelectedCode('');
-      showAlert('Sucesso', `Ordem de Serviço anexada e ${reconciledCount} itens vinculados!`, 'success');
+      showAlert('Sucesso', `O.S. anexada e ${count} itens vinculados!`, 'success');
     } catch (error) {
       showAlert('Erro', 'Falha ao salvar o arquivo.', 'danger');
     }
   };
 
-  const handleEdit = (order) => {
-    setEditingOrder({ ...order });
-    setIsEditModalOpen(true);
-  };
-
   const handleUpdateOrder = async () => {
-    const { osNumber, clientName, clientPhone, items, value } = editingOrder;
+    const { osNumber, clientName, clientPhone, items, value, withdrawalDate } = editingOrder;
 
     const missingFields = [];
     if (!osNumber) missingFields.push("N° da O.S.");
@@ -237,10 +276,13 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
     }
 
     try {
-      // Se o arquivo foi alterado (é uma string base64/dataURL), salvar no IndexedDB
       if (editingOrder.file && editingOrder.file.startsWith('data:')) {
         await saveServiceOrderContent(editingOrder.id, editingOrder.file);
       }
+
+      // Re-reconciliação ao editar
+      const { updatedMovements, count } = performReconciliation(movements, editingOrder.id, items, withdrawalDate, osNumber);
+      if (count > 0) setMovements(updatedMovements);
 
       setServiceOrders(prev => prev.map(o => {
         if (o.id === editingOrder.id) {
@@ -259,10 +301,9 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
       }));
       setIsEditModalOpen(false);
       setEditingOrder(null);
-      showAlert('Sucesso', 'Registro atualizado com sucesso!', 'success');
+      showAlert('Sucesso', 'Registro atualizado e pendências re-avaliadas!', 'success');
     } catch (error) {
-      console.error(error);
-      showAlert('Erro', 'Falha ao atualizar o arquivo PDF.', 'danger');
+      showAlert('Erro', 'Falha ao atualizar o registro.', 'danger');
     }
   };
 
@@ -338,7 +379,7 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
     setServiceOrders(prev => {
       return prev.map(o => {
         if (o.id === orderId) {
-          const updatedAlerts = (o.alerts || []).map(a => 
+          const updatedAlerts = (o.alerts || []).map(a =>
             a.timestamp === alertTimestamp ? {
               ...a,
               status: 'corrigido',
@@ -346,7 +387,7 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
               resolvedAt: new Date().toISOString()
             } : a
           );
-          
+
           // Atualiza o modal de histórico se estiver aberto
           if (alertHistoryModal.isOpen && alertHistoryModal.order?.id === orderId) {
             setAlertHistoryModal(m => ({
@@ -365,21 +406,21 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
 
   const getOrderStatusDetails = (alerts = []) => {
     if (alerts.length === 0) return { label: 'Regular', class: 'regular', color: '#38bdf8' };
-    
+
     const active = alerts.filter(a => a.status === 'ativo').length;
     const resolved = alerts.filter(a => a.status === 'corrigido').length;
 
     if (active > 0 && resolved === 0) return { label: 'Pendente', class: 'pendente', color: '#ef4444' };
     if (active > 0 && resolved > 0) return { label: 'Parcialmente Corrigido', class: 'parcial', color: '#f59e0b' };
     if (active === 0 && resolved > 0) return { label: 'Concluído', class: 'concluido', color: '#10b981' };
-    
+
     return { label: 'Regular', class: 'regular', color: '#38bdf8' };
   };
 
   const handleCorrection = (id) => {
     setServiceOrders(prev => prev.map(o => {
       if (o.id === id) {
-        const updatedAlerts = (o.alerts || []).map(a => 
+        const updatedAlerts = (o.alerts || []).map(a =>
           a.status === 'ativo' ? {
             ...a,
             status: 'corrigido',
@@ -449,7 +490,7 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
         if (details.label !== filterMap[statusFilter]) return false;
       }
 
-       // 3. Filtro de Data
+      // 3. Filtro de Data
       if (dateFilter) {
         const orderDate = new Date(o.attachedAt).toLocaleDateString('sv-SE');
         if (orderDate !== dateFilter) return false;
@@ -458,10 +499,10 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
       // 4. Filtro de Busca Texto
       const searchLower = searchTerm.toLowerCase();
       return (
-        o.osNumber.toLowerCase().includes(searchLower) || 
-        o.clientName.toLowerCase().includes(searchLower) || 
-        o.items?.some(item => 
-          item.code.toLowerCase().includes(searchLower) || 
+        o.osNumber.toLowerCase().includes(searchLower) ||
+        o.clientName.toLowerCase().includes(searchLower) ||
+        o.items?.some(item =>
+          item.code.toLowerCase().includes(searchLower) ||
           item.delivery.toLowerCase().includes(searchLower)
         )
       );
@@ -488,48 +529,54 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
         </button>
       </div>
 
-      <div 
-        className="status-summary-grid" 
+      <div
+        className="status-summary-grid"
         ref={kpiGridRef}
-        style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(4, 1fr)', 
-          gap: '1rem', 
-          marginBottom: '2rem' 
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(4, 1fr)',
+          gap: '1rem',
+          marginBottom: '2rem'
         }}
       >
         {[
           { label: 'Regulares', count: serviceOrders.filter(o => !o.hidden && !o.alerts?.length).length, icon: CheckCircle2, color: '#38bdf8' },
-          { label: 'Pendentes', count: serviceOrders.filter(o => {
+          {
+            label: 'Pendentes', count: serviceOrders.filter(o => {
               if (o.hidden) return false;
               const details = getOrderStatusDetails(o.alerts);
               return details.label === 'Pendente';
-            }).length, icon: AlertCircle, color: '#ef4444' },
-          { label: 'Parciais', count: serviceOrders.filter(o => {
+            }).length, icon: AlertCircle, color: '#ef4444'
+          },
+          {
+            label: 'Parciais', count: serviceOrders.filter(o => {
               if (o.hidden) return false;
               const details = getOrderStatusDetails(o.alerts);
               return details.label === 'Parcialmente Corrigido';
-            }).length, icon: AlertCircle, color: '#f59e0b' },
-          { label: 'Concluídos', count: serviceOrders.filter(o => {
+            }).length, icon: AlertCircle, color: '#f59e0b'
+          },
+          {
+            label: 'Concluídos', count: serviceOrders.filter(o => {
               if (o.hidden) return false;
               const details = getOrderStatusDetails(o.alerts);
               return details.label === 'Concluído';
-            }).length, icon: CheckCircle2, color: '#10b981' }
+            }).length, icon: CheckCircle2, color: '#10b981'
+          }
         ].map((kpi, kIdx) => {
           const isActive = statusFilter === kpi.label;
           return (
-            <div 
-              key={kIdx} 
-              className={`status-kpi-card glass-effect ${isActive ? 'active-filter' : ''}`} 
+            <div
+              key={kIdx}
+              className={`status-kpi-card glass-effect ${isActive ? 'active-filter' : ''}`}
               onClick={(e) => {
                 e.stopPropagation();
                 setStatusFilter(isActive ? null : kpi.label);
               }}
-              style={{ 
-                borderLeft: `4px solid ${kpi.color}`, 
-                padding: '1.25rem', 
-                display: 'flex', 
-                justifyContent: 'space-between', 
+              style={{
+                borderLeft: `4px solid ${kpi.color}`,
+                padding: '1.25rem',
+                display: 'flex',
+                justifyContent: 'space-between',
                 alignItems: 'center',
                 cursor: 'pointer',
                 background: isActive ? `${kpi.color}20` : 'rgba(255,255,255,0.03)',
@@ -553,12 +600,12 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
         })}
       </div>
 
-       <div className="search-bar-container" style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+      <div className="search-bar-container" style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
         <div className="search-input" style={{ flex: 1, minWidth: '250px' }}>
           <Search size={18} />
-          <input 
-            type="text" 
-            placeholder="Buscar por OS, Cliente ou Delivery..." 
+          <input
+            type="text"
+            placeholder="Buscar por OS, Cliente ou Delivery..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -566,22 +613,22 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
 
         <div className="date-filter-wrapper" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: 'rgba(255,255,255,0.03)', padding: '0.5rem 1rem', borderRadius: '12px', border: '1px solid var(--border)' }}>
           <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Filtrar por Data:</label>
-          <input 
-            type="date" 
+          <input
+            type="date"
             value={dateFilter}
             onChange={(e) => setDateFilter(e.target.value)}
             style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', outline: 'none', fontSize: '0.85rem' }}
           />
-          <button 
+          <button
             className="btn-today"
-            style={{ 
-              background: 'rgba(56, 189, 248, 0.1)', 
-              border: '1px solid rgba(56, 189, 248, 0.2)', 
-              color: 'var(--accent)', 
-              fontSize: '0.7rem', 
-              fontWeight: 800, 
-              padding: '2px 8px', 
-              borderRadius: '6px', 
+            style={{
+              background: 'rgba(56, 189, 248, 0.1)',
+              border: '1px solid rgba(56, 189, 248, 0.2)',
+              color: 'var(--accent)',
+              fontSize: '0.7rem',
+              fontWeight: 800,
+              padding: '2px 8px',
+              borderRadius: '6px',
               cursor: 'pointer',
               textTransform: 'uppercase'
             }}
@@ -592,8 +639,8 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
         </div>
 
         {(searchTerm || dateFilter || statusFilter) && (
-          <button 
-            className="btn-text" 
+          <button
+            className="btn-text"
             style={{ color: '#ef4444', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', padding: '0.5rem 1rem', background: 'rgba(239, 68, 68, 0.05)', borderRadius: '10px' }}
             onClick={() => {
               setSearchTerm('');
@@ -627,6 +674,7 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
                 <div className="os-card-chips">
                   {o.items?.map((item, idx) => (
                     <span key={idx} className="chip-item paired">
+                      <span className="q" style={{ fontWeight: 800, color: 'var(--accent)', marginRight: '4px' }}>{item.quantity || 1}x</span>
                       <span className="c">{item.code}</span>
                       <span className="sep">•</span>
                       <span className="d">{item.delivery}</span>
@@ -653,9 +701,9 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
                   )}
                 </div>
                 <div className="attachment-btns">
-                  <button 
-                    className="btn-action-icon" 
-                    title="Ver PDF" 
+                  <button
+                    className="btn-action-icon"
+                    title="Ver PDF"
                     onClick={() => handleViewPdf(o.id)}
                   >
                     <Eye size={18} />
@@ -690,14 +738,14 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
                 ) : (
                   canCheckIn && (
                     <button className="btn-validate" onClick={() => handleCheckIn(o.id)} style={{ padding: '0.6rem 1.2rem', width: '100%', minWidth: '140px' }}>
-                      Validar Check-in
+                      Validar PDF
                     </button>
                   )
                 )}
 
                 <div className="cell-status">
                   {o.alerts && o.alerts.length > 0 && (
-                    <div 
+                    <div
                       className={`alert-icon-btn clickable ${o.alerts.some(a => a.status === 'ativo') ? 'ativo' : 'corrigido'}`}
                       onClick={() => setAlertHistoryModal({ isOpen: true, order: o })}
                       title="Clique para ver o Histórico de Alertas"
@@ -713,9 +761,9 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
               <div className="os-card-actions">
                 <div className="action-group">
                   {canAlertError && (
-                    <button 
-                      className="btn-icon-warning" 
-                      title="Alertar Erro" 
+                    <button
+                      className="btn-icon-warning"
+                      title="Alertar Erro"
                       onClick={() => setAlertModal({ isOpen: true, orderId: o.id })}
                     >
                       <AlertCircle size={18} />
@@ -723,9 +771,9 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
                   )}
 
                   {o.alerts?.some(a => a.status === 'ativo') && canManage && (
-                    <button 
-                      className="btn-icon-success" 
-                      title="Corrigir" 
+                    <button
+                      className="btn-icon-success"
+                      title="Corrigir"
                       onClick={() => handleCorrection(o.id)}
                     >
                       <CheckCircle2 size={18} />
@@ -733,8 +781,8 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
                   )}
 
                   {canManage && (
-                    <button 
-                      className="btn-icon-edit" 
+                    <button
+                      className="btn-icon-edit"
                       title="Editar Registro"
                       onClick={() => handleEdit(o)}
                     >
@@ -745,15 +793,15 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
 
                 {isAdmin && (
                   <div className="action-group">
-                    <button 
-                      className="btn-icon-danger" 
+                    <button
+                      className="btn-icon-danger"
                       title="Anular"
                       onClick={() => setJustificationModal({ isOpen: true, orderId: o.id, action: 'annul' })}
                     >
                       <XCircle size={18} />
                     </button>
-                    <button 
-                      className="btn-icon-danger" 
+                    <button
+                      className="btn-icon-danger"
                       title="Remover"
                       onClick={() => setJustificationModal({ isOpen: true, orderId: o.id, action: 'delete' })}
                     >
@@ -781,19 +829,19 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
               <div className="grid-2">
                 <div className="input-group">
                   <label>N° da Ordem de Serviço</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={newOrder.osNumber}
-                    onChange={(e) => setNewOrder({...newOrder, osNumber: e.target.value})}
+                    onChange={(e) => setNewOrder({ ...newOrder, osNumber: e.target.value })}
                     placeholder="Ex: 450982"
                   />
                 </div>
                 <div className="input-group">
                   <label>Data da Retirada (Saída)</label>
-                  <input 
-                    type="date" 
+                  <input
+                    type="date"
                     value={newOrder.withdrawalDate}
-                    onChange={(e) => setNewOrder({...newOrder, withdrawalDate: e.target.value})}
+                    onChange={(e) => setNewOrder({ ...newOrder, withdrawalDate: e.target.value })}
                   />
                   <span style={{ fontSize: '0.75rem', color: 'var(--primary-color)', marginTop: '4px', opacity: 0.8 }}>
                     Esta data será usada para localizar e abater a pendência.
@@ -803,29 +851,29 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
               <div className="grid-2">
                 <div className="input-group">
                   <label>Nome do Cliente</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={newOrder.clientName}
-                    onChange={(e) => setNewOrder({...newOrder, clientName: e.target.value})}
+                    onChange={(e) => setNewOrder({ ...newOrder, clientName: e.target.value })}
                     placeholder="Nome completo"
                   />
                 </div>
                 <div className="input-group">
                   <label>Telefone do Cliente (DDD + Número)</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={newOrder.clientPhone}
-                    onChange={(e) => setNewOrder({...newOrder, clientPhone: e.target.value.replace(/\D/g, '')})}
+                    onChange={(e) => setNewOrder({ ...newOrder, clientPhone: e.target.value.replace(/\D/g, '') })}
                     placeholder="Ex: 11999999999"
                     maxLength="11"
                   />
                 </div>
               </div>
-              <div className="grid-2 paired-input-row" style={{ background: 'rgba(255,255,255,0.03)', padding: '1rem', borderRadius: '16px', marginBottom: '1.5rem', border: '1px solid rgba(255,255,255,0.05)', gap: '1rem' }}>
+              <div className="paired-input-row" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.6fr)', background: 'rgba(255,255,255,0.03)', padding: '1rem', borderRadius: '16px', marginBottom: '1.5rem', border: '1px solid rgba(255,255,255,0.05)', gap: '1rem' }}>
                 <div className="input-group" style={{ marginBottom: 0 }}>
                   <label>1. Selecione a Peça</label>
                   <div className="searchable-select-container" ref={accDropdownRef}>
-                    <div 
+                    <div
                       className={`search-select-trigger ${isAccDropdownOpen ? 'open' : ''} ${tempSelectedCode ? 'selected' : ''}`}
                       onClick={() => setIsAccDropdownOpen(!isAccDropdownOpen)}
                     >
@@ -838,8 +886,8 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
                       <div className="search-select-dropdown glass-effect">
                         <div className="search-input-wrapper">
                           <Search size={14} />
-                          <input 
-                            type="text" 
+                          <input
+                            type="text"
                             autoFocus
                             placeholder="Buscar código ou nome..."
                             value={accSearchTerm}
@@ -852,8 +900,8 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
                             <div className="option-empty">Nenhum acessório encontrado</div>
                           ) : (
                             filteredAccessories.map(acc => (
-                              <div 
-                                key={acc.id} 
+                              <div
+                                key={acc.id}
                                 className="option-item"
                                 onClick={() => {
                                   setTempSelectedCode(acc.factoryCode);
@@ -875,23 +923,34 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
                 <div className="input-group" style={{ marginBottom: 0 }}>
                   <label>2. Digite a Delivery</label>
                   <div className="input-with-button">
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       maxLength="10"
                       value={currentDelivery}
                       onChange={(e) => setCurrentDelivery(e.target.value.replace(/\D/g, ''))}
                       placeholder="0000000000"
                     />
-                    <button 
+                    <div style={{ minWidth: '65px', flex: '0 0 65px' }}>
+                      <input
+                        type="number"
+                        min="1"
+                        value={currentQty}
+                        onChange={(e) => setCurrentQty(Math.max(1, parseInt(e.target.value) || 1))}
+                        style={{ textAlign: 'center', padding: '0.9rem 0.2rem' }}
+                        title="Quantidade"
+                      />
+                    </div>
+                    <button
                       className="btn-add-tag"
                       title="Adicionar Conjunto"
                       disabled={!tempSelectedCode || currentDelivery.length !== 10}
                       onClick={() => {
-                        const newItem = { code: tempSelectedCode, delivery: currentDelivery };
+                        const newItem = { code: tempSelectedCode, delivery: currentDelivery, quantity: currentQty };
                         if (!newOrder.items.some(i => i.code === newItem.code && i.delivery === newItem.delivery)) {
                           setNewOrder({ ...newOrder, items: [...newOrder.items, newItem] });
                           setTempSelectedCode('');
                           setCurrentDelivery('');
+                          setCurrentQty(1);
                         } else {
                           showAlert('Atenção', 'Este par (Código + Delivery) já foi adicionado.', 'warning');
                         }
@@ -909,6 +968,7 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
                   {newOrder.items.length === 0 && <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', opacity: 0.5 }}>Nenhum item adicionado ainda...</span>}
                   {newOrder.items.map((item, idx) => (
                     <span key={idx} className="tag-chip paired">
+                      <span className="qty" style={{ background: 'var(--accent)', color: '#000', padding: '0 6px', borderRadius: '4px', fontWeight: 'bold', fontSize: '0.7rem' }}>{item.quantity || 1}x</span>
                       <span className="code">{item.code}</span>
                       <span className="separator">•</span>
                       <span className="delivery">{item.delivery}</span>
@@ -922,8 +982,8 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
                   <label>Valor da Venda</label>
                   <div style={{ position: 'relative' }}>
                     <DollarSign size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', opacity: 0.5 }} />
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       style={{ paddingLeft: '32px' }}
                       value={newOrder.value}
                       onChange={handleValueChange}
@@ -934,11 +994,11 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
                 <div className="input-group">
                   <label>Arquivo PDF (Max 2MB)</label>
                   <div className="premium-file-upload">
-                    <input 
-                      type="file" 
+                    <input
+                      type="file"
                       id="pdf-upload"
-                      accept=".pdf" 
-                      onChange={handleFileChange} 
+                      accept=".pdf"
+                      onChange={handleFileChange}
                       style={{ display: 'none' }}
                     />
                     <label htmlFor="pdf-upload" className="dropzone-area">
@@ -946,7 +1006,7 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
                         <div className="file-info-premium">
                           <FileText className="accent" size={20} />
                           <span className="file-name-text">{newOrder.fileName}</span>
-                          <button 
+                          <button
                             className="btn-clear-file"
                             onClick={(e) => {
                               e.preventDefault();
@@ -970,7 +1030,7 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
             </div>
             <div className="modal-footer" style={{ marginTop: '2rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               <button className="btn-primary" style={{ width: '100%' }} onClick={handleSaveOrder}>Salvar Anexo</button>
-              <button className="btn-danger" style={{ width: '100%' }} onClick={() => setIsModalOpen(false)}>Cancelar</button>
+              <button className="btn-cancel" style={{ width: '100%' }} onClick={() => setIsModalOpen(false)}>Cancelar</button>
             </div>
           </div>
         </div>
@@ -987,11 +1047,11 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
               <p>Esta ação exige uma justificativa obrigatória.</p>
             </div>
             <div style={{ marginTop: '1.5rem' }}>
-            <textarea 
-              value={justification}
-              onChange={(e) => setJustification(e.target.value)}
-              placeholder="Descreva o motivo..."
-            />
+              <textarea
+                value={justification}
+                onChange={(e) => setJustification(e.target.value)}
+                placeholder="Descreva o motivo..."
+              />
             </div>
             <div className="modal-footer" style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               <button className="btn-primary" style={{ width: '100%' }} onClick={handleActionWithJustification}>
@@ -1013,18 +1073,18 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
               <h3>Alertar Erro</h3>
               <p>Descreva o erro encontrado nesta OS para correção.</p>
             </div>
-            
+
             <div className="pre-defined-errors">
-              <button 
-                type="button" 
-                className="error-chip" 
+              <button
+                type="button"
+                className="error-chip"
                 onClick={() => setErrorDescription("O.S INCORRETA")}
               >
                 O.S INCORRETA
               </button>
-              <button 
-                type="button" 
-                className="error-chip" 
+              <button
+                type="button"
+                className="error-chip"
                 onClick={() => setErrorDescription("DELIVERY INCORRETA")}
               >
                 DELIVERY INCORRETA
@@ -1032,7 +1092,7 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
             </div>
 
             <div style={{ marginTop: '1rem' }}>
-              <textarea 
+              <textarea
                 value={errorDescription}
                 onChange={(e) => setErrorDescription(e.target.value)}
                 placeholder="Descreva o erro encontrado nesta OS..."
@@ -1078,16 +1138,16 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
               <div className="grid-2">
                 <div className="input-group">
                   <label>N° da Ordem de Serviço</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={editingOrder.osNumber}
-                    onChange={(e) => setEditingOrder({...editingOrder, osNumber: e.target.value})}
+                    onChange={(e) => setEditingOrder({ ...editingOrder, osNumber: e.target.value })}
                   />
                 </div>
                 <div className="input-group">
                   <label>Valor Total</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={editingOrder.value}
                     onChange={(e) => setEditingOrder({ ...editingOrder, value: formatCurrency(e.target.value) })}
                   />
@@ -1097,16 +1157,16 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
               <div className="grid-2">
                 <div className="input-group">
                   <label>Nome do Cliente</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={editingOrder.clientName}
-                    onChange={(e) => setEditingOrder({...editingOrder, clientName: e.target.value})}
+                    onChange={(e) => setEditingOrder({ ...editingOrder, clientName: e.target.value })}
                   />
                 </div>
                 <div className="input-group">
                   <label>Telefone do Cliente</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={editingOrder.clientPhone || ''}
                     onChange={(e) => setEditingOrder({ ...editingOrder, clientPhone: e.target.value.replace(/\D/g, '') })}
                     placeholder="Ex: 11999999999"
@@ -1114,28 +1174,51 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
                   />
                 </div>
               </div>
-              
-              <div className="grid-2 paired-input-row" style={{ background: 'rgba(255,255,255,0.03)', padding: '1rem', borderRadius: '16px', marginBottom: '1.5rem', border: '1px solid rgba(255,255,255,0.05)', gap: '1rem' }}>
+
+              <div className="paired-input-row" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.6fr)', background: 'rgba(255,255,255,0.03)', padding: '1rem', borderRadius: '16px', marginBottom: '1.5rem', border: '1px solid rgba(255,255,255,0.05)', gap: '1rem' }}>
                 <div className="input-group" style={{ marginBottom: 0 }}>
                   <label>Adicionar Peça</label>
                   <div className="searchable-select-container" ref={accDropdownRef}>
-                    <div 
+                    <div
                       className={`search-select-trigger ${isAccDropdownOpen ? 'open' : ''}`}
                       onClick={() => setIsAccDropdownOpen(!isAccDropdownOpen)}
                     >
                       <Package size={16} />
-                      <span>{tempSelectedCode || 'Selecionar código...'}</span>
+                      <span>{tempSelectedCode || (isAccDropdownOpen ? 'Pesquisar...' : 'Selecionar código...')}</span>
                       <ChevronDown size={14} className={`chevron ${isAccDropdownOpen ? 'rotated' : ''}`} />
                     </div>
                     {isAccDropdownOpen && (
                       <div className="search-select-dropdown glass-effect">
+                        <div className="search-input-wrapper">
+                          <Search size={14} />
+                          <input
+                            type="text"
+                            autoFocus
+                            placeholder="Buscar código ou nome..."
+                            value={accSearchTerm}
+                            onChange={(e) => setAccSearchTerm(e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </div>
                         <div className="options-list custom-scrollbar">
-                          {accessories.map(acc => (
-                            <div key={acc.id} className="option-item" onClick={() => { setTempSelectedCode(acc.factoryCode); setIsAccDropdownOpen(false); }}>
-                              <span className="acc-code">{acc.factoryCode}</span>
-                              <span className="acc-name">{acc.commercialName}</span>
-                            </div>
-                          ))}
+                          {filteredAccessories.length === 0 ? (
+                            <div className="option-empty">Nenhum acessório encontrado</div>
+                          ) : (
+                            filteredAccessories.map(acc => (
+                              <div
+                                key={acc.id}
+                                className="option-item"
+                                onClick={() => {
+                                  setTempSelectedCode(acc.factoryCode);
+                                  setIsAccDropdownOpen(false);
+                                  setAccSearchTerm('');
+                                }}
+                              >
+                                <span className="acc-code">{acc.factoryCode}</span>
+                                <span className="acc-name">{acc.commercialName}</span>
+                              </div>
+                            ))
+                          )}
                         </div>
                       </div>
                     )}
@@ -1144,91 +1227,91 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
                 <div className="input-group" style={{ marginBottom: 0 }}>
                   <label>Delivery</label>
                   <div className="input-with-button">
-                      <input 
-                        type="text" 
-                        maxLength="10"
-                        value={currentDelivery}
-                        onChange={(e) => setCurrentDelivery(e.target.value.replace(/\D/g, ''))}
-                        placeholder="0000000000"
-                        style={{ flex: 1 }}
-                      />
-                      <button 
-                        className="btn-add-tag"
-                        onMouseEnter={(e) => e.target.style.background = 'rgba(56, 189, 248, 0.2)'}
-                        onMouseLeave={(e) => e.target.style.background = 'rgba(255, 255, 255, 0.05)'}
-                        style={{ padding: '0 15px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.1)', cursor: 'pointer', transition: 'all 0.2s' }}
-                        disabled={!tempSelectedCode || currentDelivery.length !== 10}
-                        onClick={() => {
-                          const newItem = { code: tempSelectedCode, delivery: currentDelivery };
-                          setEditingOrder({ ...editingOrder, items: [...editingOrder.items, newItem] });
-                          setTempSelectedCode('');
-                          setCurrentDelivery('');
-                        }}
-                      >
-                        <Plus size={18} />
-                      </button>
-                    </div>
+                    <input
+                      type="text"
+                      maxLength="10"
+                      value={currentDelivery}
+                      onChange={(e) => setCurrentDelivery(e.target.value.replace(/\D/g, ''))}
+                      placeholder="0000000000"
+                      style={{ flex: 1 }}
+                    />
+                    <button
+                      className="btn-add-tag"
+                      onMouseEnter={(e) => e.target.style.background = 'rgba(56, 189, 248, 0.2)'}
+                      onMouseLeave={(e) => e.target.style.background = 'rgba(255, 255, 255, 0.05)'}
+                      style={{ padding: '0 15px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.1)', cursor: 'pointer', transition: 'all 0.2s' }}
+                      disabled={!tempSelectedCode || currentDelivery.length !== 10}
+                      onClick={() => {
+                        const newItem = { code: tempSelectedCode, delivery: currentDelivery };
+                        setEditingOrder({ ...editingOrder, items: [...editingOrder.items, newItem] });
+                        setTempSelectedCode('');
+                        setCurrentDelivery('');
+                      }}
+                    >
+                      <Plus size={18} />
+                    </button>
                   </div>
                 </div>
-
-                {/* Lista de Itens na Edição */}
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '1.5rem' }}>
-                  {editingOrder.items.map((item, idx) => (
-                    <div key={idx} className="os-item-tag" style={{ border: '1px solid rgba(56, 189, 248, 0.3)', background: 'rgba(56, 189, 248, 0.1)', color: '#38bdf8', padding: '4px 10px', borderRadius: '8px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span>{item.code} • {item.delivery}</span>
-                      <button 
-                        onClick={() => setEditingOrder({ ...editingOrder, items: editingOrder.items.filter((_, i) => i !== idx) })}
-                        style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: 0, display: 'flex' }}
-                      >
-                        <X size={14} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="input-group">
-                  <label>Valor Total (Venda)</label>
-                  <input 
-                    type="text" 
-                    value={editingOrder.value}
-                    onChange={(e) => setEditingOrder({ ...editingOrder, value: formatCurrency(e.target.value) })}
-                  />
-                </div>
-
-                {/* Substituição de PDF */}
-                {(currentUser.role === 'admin' || currentUser.sector === 'atendimento') && (
-                  <div className="input-group" style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-                    <label style={{ color: 'var(--accent)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <UploadCloud size={18} /> Substituir Documento PDF
-                    </label>
-                    <div className="file-edit-container" style={{ marginTop: '1rem' }}>
-                      <input 
-                        type="file" 
-                        id="edit-pdf-input"
-                        accept=".pdf" 
-                        hidden 
-                        onChange={(e) => {
-                          const file = e.target.files[0];
-                          if (file) {
-                            const reader = new FileReader();
-                            reader.onload = (re) => {
-                              setEditingOrder({ ...editingOrder, file: re.target.result, fileName: file.name });
-                            };
-                            reader.readAsDataURL(file);
-                          }
-                        }}
-                      />
-                      <label htmlFor="edit-pdf-input" className="btn-secondary" style={{ width: '100%', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px', padding: '12px' }}>
-                        <FileDown size={18} /> {editingOrder.fileName || 'Selecionar novo PDF'}
-                      </label>
-                      <p style={{ fontSize: '0.7rem', opacity: 0.5, textAlign: 'center', marginTop: '10px' }}>
-                        Ao salvar, o PDF antigo será **descartado** permanentemente.
-                      </p>
-                    </div>
-                  </div>
-                )}
-
               </div>
+
+              {/* Lista de Itens na Edição */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '1.5rem' }}>
+                {editingOrder.items.map((item, idx) => (
+                  <div key={idx} className="os-item-tag" style={{ border: '1px solid rgba(56, 189, 248, 0.3)', background: 'rgba(56, 189, 248, 0.1)', color: '#38bdf8', padding: '4px 10px', borderRadius: '8px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span>{item.code} • {item.delivery}</span>
+                    <button
+                      onClick={() => setEditingOrder({ ...editingOrder, items: editingOrder.items.filter((_, i) => i !== idx) })}
+                      style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: 0, display: 'flex' }}
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <div className="input-group">
+                <label>Valor Total (Venda)</label>
+                <input
+                  type="text"
+                  value={editingOrder.value}
+                  onChange={(e) => setEditingOrder({ ...editingOrder, value: formatCurrency(e.target.value) })}
+                />
+              </div>
+
+              {/* Substituição de PDF */}
+              {(currentUser.role === 'admin' || currentUser.sector === 'atendimento') && (
+                <div className="input-group" style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                  <label style={{ color: 'var(--accent)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <UploadCloud size={18} /> Substituir Documento PDF
+                  </label>
+                  <div className="file-edit-container" style={{ marginTop: '1rem' }}>
+                    <input
+                      type="file"
+                      id="edit-pdf-input"
+                      accept=".pdf"
+                      hidden
+                      onChange={(e) => {
+                        const file = e.target.files[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onload = (re) => {
+                            setEditingOrder({ ...editingOrder, file: re.target.result, fileName: file.name });
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                    />
+                    <label htmlFor="edit-pdf-input" className="btn-secondary" style={{ width: '100%', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px', padding: '12px' }}>
+                      <FileDown size={18} /> {editingOrder.fileName || 'Selecionar novo PDF'}
+                    </label>
+                    <p style={{ fontSize: '0.7rem', opacity: 0.5, textAlign: 'center', marginTop: '10px' }}>
+                      Ao salvar, o PDF antigo será **descartado** permanentemente.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+            </div>
             <div className="modal-footer" style={{ marginTop: '2rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               <button className="btn-primary" style={{ width: '100%' }} onClick={handleUpdateOrder}>Salvar Alterações</button>
               <button className="btn-danger" style={{ width: '100%' }} onClick={() => setIsEditModalOpen(false)}>Cancelar</button>
@@ -1238,7 +1321,7 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
       )}
 
       {/* Modal de Confirmação de Check-in */}
-      <ConfirmModal 
+      <ConfirmModal
         isOpen={confirmCheckIn.isOpen}
         title="Confirmar Check-in"
         message="Deseja validar esta Ordem de Serviço? Esta ação confirma que todos os itens foram conferidos."
@@ -1268,58 +1351,58 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
                 .slice()
                 .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
                 .map((alert, idx) => (
-                <div key={idx} className={`alert-history-item ${alert.status}`}>
-                  <div className="item-main-header">
-                    <span className={`status-tag ${alert.status}`}>
-                      {alert.status === 'ativo' ? '⚠️ Pendente' : '✅ Resolvido'}
-                    </span>
-                    <span className="timestamp" style={{ fontSize: '0.75rem', opacity: 0.6 }}>
-                      {new Date(alert.timestamp).toLocaleString('pt-BR')}
-                    </span>
-                  </div>
-                  
-                  <div className="error-content">
-                    <p style={{ margin: '0.5rem 0' }}>{alert.description}</p>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: '1rem' }}>
-                      <div className="author-info" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', opacity: 0.8 }}>
-                        <User size={14} />
-                        <span>Reportado por: <strong>{alert.author}</strong></span>
-                      </div>
-                      
-                      {alert.status === 'ativo' && canManage && (
-                        <button 
-                          className="btn-success-sm" 
-                          onClick={() => handleSingleCorrection(alertHistoryModal.order.id, alert.timestamp)}
-                          style={{ padding: '6px 12px', fontSize: '0.75rem', borderRadius: '6px' }}
-                        >
-                          Corrigir Erro
-                        </button>
-                      )}
+                  <div key={idx} className={`alert-history-item ${alert.status}`}>
+                    <div className="item-main-header">
+                      <span className={`status-tag ${alert.status}`}>
+                        {alert.status === 'ativo' ? '⚠️ Pendente' : '✅ Resolvido'}
+                      </span>
+                      <span className="timestamp" style={{ fontSize: '0.75rem', opacity: 0.6 }}>
+                        {new Date(alert.timestamp).toLocaleString('pt-BR')}
+                      </span>
                     </div>
-                  </div>
 
-                  {alert.status === 'corrigido' && (
-                    <div className="correction-details" style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-                      <div className="correction-content">
-                        <span className="correction-label" style={{ fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase', color: '#10b981', display: 'block', marginBottom: '8px' }}>
-                          CORREÇÃO EFETUADA:
-                        </span>
+                    <div className="error-content">
+                      <p style={{ margin: '0.5rem 0' }}>{alert.description}</p>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: '1rem' }}>
                         <div className="author-info" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', opacity: 0.8 }}>
-                          <CheckCircle2 size={14} />
-                          <span>Corrigido por: <strong>{alert.resolvedBy}</strong></span>
+                          <User size={14} />
+                          <span>Reportado por: <strong>{alert.author}</strong></span>
                         </div>
-                        <span className="timestamp" style={{ fontSize: '0.7rem', opacity: 0.5, display: 'block', marginTop: '4px' }}>
-                          {new Date(alert.resolvedAt).toLocaleString('pt-BR')}
-                        </span>
+
+                        {alert.status === 'ativo' && canManage && (
+                          <button
+                            className="btn-success-sm"
+                            onClick={() => handleSingleCorrection(alertHistoryModal.order.id, alert.timestamp)}
+                            style={{ padding: '6px 12px', fontSize: '0.75rem', borderRadius: '6px' }}
+                          >
+                            Corrigir Erro
+                          </button>
+                        )}
                       </div>
                     </div>
-                  )}
-                </div>
-              ))}
+
+                    {alert.status === 'corrigido' && (
+                      <div className="correction-details" style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                        <div className="correction-content">
+                          <span className="correction-label" style={{ fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase', color: '#10b981', display: 'block', marginBottom: '8px' }}>
+                            CORREÇÃO EFETUADA:
+                          </span>
+                          <div className="author-info" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', opacity: 0.8 }}>
+                            <CheckCircle2 size={14} />
+                            <span>Corrigido por: <strong>{alert.resolvedBy}</strong></span>
+                          </div>
+                          <span className="timestamp" style={{ fontSize: '0.7rem', opacity: 0.5, display: 'block', marginTop: '4px' }}>
+                            {new Date(alert.resolvedAt).toLocaleString('pt-BR')}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
             </div>
 
-            <button 
-              className="btn-primary" 
+            <button
+              className="btn-primary"
               style={{ width: '100%', marginTop: '1.5rem' }}
               onClick={() => setAlertHistoryModal({ isOpen: false, order: null })}
             >

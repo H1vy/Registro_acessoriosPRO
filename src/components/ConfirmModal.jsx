@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, AlertTriangle, CheckCircle } from 'lucide-react';
+import { X, AlertTriangle, CheckCircle, Edit3 } from 'lucide-react';
 
 export default function ConfirmModal({ 
   isOpen, 
@@ -21,19 +21,22 @@ export default function ConfirmModal({
   selectValue = '',
   onSelectChange = null,
   selectPlaceholder = 'Selecione...',
-  selectLabel = ''
+  selectLabel = '',
+  maxWidth = '420px'
 }) {
   if (!isOpen) return null;
 
   const isDanger = type === 'danger';
   const isSuccess = type === 'success';
+  const isEdit = type === 'edit';
 
   return (
     <div className="modal-backdrop">
       <div 
         className="modal-card" 
         style={{ 
-          maxWidth: '420px', 
+          maxWidth: maxWidth, 
+          width: '100%',
           padding: '2.5rem 2rem 2rem', 
           borderRadius: '28px',
           background: 'rgba(10, 15, 29, 0.45)', // Mais translúcido
@@ -75,17 +78,22 @@ export default function ConfirmModal({
           {/* Ícone no topo */}
           <div style={{ marginBottom: '1.25rem', display: 'flex', justifyContent: 'center' }}>
             {isDanger && (
-              <div style={{ padding: '12px', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '16px' }}>
+              <div style={{ padding: '14px', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '18px', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
                 <AlertTriangle size={32} color="#ef4444" />
               </div>
             )}
             {isSuccess && (
-              <div style={{ padding: '12px', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '16px' }}>
+              <div style={{ padding: '14px', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '18px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
                 <CheckCircle size={32} color="#10b981" />
               </div>
             )}
-            {!isDanger && !isSuccess && (
-              <div style={{ padding: '12px', background: 'rgba(56, 189, 248, 0.1)', borderRadius: '16px' }}>
+            {isEdit && (
+              <div style={{ padding: '14px', background: 'rgba(56, 189, 248, 0.1)', borderRadius: '18px', border: '1px solid rgba(56, 189, 248, 0.2)' }}>
+                <Edit3 size={32} color="var(--accent)" />
+              </div>
+            )}
+            {!isDanger && !isSuccess && !isEdit && (
+              <div style={{ padding: '14px', background: 'rgba(56, 189, 248, 0.1)', borderRadius: '18px', border: '1px solid rgba(56, 189, 248, 0.2)' }}>
                 <AlertTriangle size={32} color="var(--accent)" />
               </div>
             )}
@@ -213,8 +221,8 @@ export default function ConfirmModal({
           
           {!hideCancel && (
             <button 
-              className="btn-text" 
-              style={{ padding: '0.5rem', opacity: 0.6 }}
+              className="btn-cancel" 
+              style={{ width: '100%' }}
               onClick={onCancel}
             >
               {cancelText}

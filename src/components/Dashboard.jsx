@@ -352,6 +352,7 @@ export default function Dashboard({ movements, accessories, responsibles, orders
       'Retirado por': o.withdrawnBy || '-',
       'Data/Hora Retirada': formatDate(o.withdrawnAt),
       'Saída reg. por': o.withdrawalRegisteredBy || '-',
+      'Última Edição Por': o.lastEditedBy || '-',
       'Anulado': o.annulled ? 'Sim' : 'Não',
       'Motivo Anulação': o.annulledReason || '-',
       'Anulado por': o.annulledBy || '-',

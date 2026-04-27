@@ -11,8 +11,9 @@ export default function PartSales({ movements, setMovements, accessories, respon
   // Filtragem por data
   const filteredByDate = movements.filter(m => {
     if (!filterDate) return true;
-    const mDate = new Date(m.timestamp).toISOString().split('T')[0];
-    const cDate = m.checkin ? new Date(m.checkin.timestamp).toISOString().split('T')[0] : null;
+    
+    const mDate = m.timestamp ? new Date(m.timestamp).toISOString().split('T')[0] : null;
+    const cDate = (m.checkin && m.checkin.timestamp) ? new Date(m.checkin.timestamp).toISOString().split('T')[0] : null;
     
     // Para pendentes, filtramos pela data da saída
     // Para realizados, filtramos pela data do check-in (conforme lógica de "reset diário")
@@ -140,7 +141,7 @@ export default function PartSales({ movements, setMovements, accessories, respon
                           style={{ padding: '0.5rem 1rem', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
                           onClick={() => setCheckinModal({ isOpen: true, movementId: m.id })}
                         >
-                          <CheckCircle2 size={16} /> Check-in
+                          <CheckCircle2 size={16} /> Validar Check-in
                         </button>
                       </td>
                     </tr>

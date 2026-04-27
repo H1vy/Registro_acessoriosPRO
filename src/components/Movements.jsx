@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { ArrowUpRight, ArrowDownLeft, ClipboardCheck, Trash2, User, XCircle, RotateCcw, X, Info, History, Clock } from 'lucide-react'
+import { Package, ArrowUpRight, ArrowDownLeft, Calendar, User, Search, Filter, FileDown, Eye, ChevronDown, ChevronUp, History, ClipboardCheck, Trash2, XCircle, AlertCircle, AlertTriangle, PackageSearch, CheckCircle2, RotateCcw, X, Info, Clock, EyeOff } from 'lucide-react'
 import CustomSelect from './CustomSelect'
 import ConfirmModal from './ConfirmModal'
 
@@ -8,7 +8,8 @@ export default function Movements({ movements, setMovements, accessories, respon
     accessoryId: '',
     responsibleId: '',
     type: 'checkout',
-    soNumber: ''
+    soNumber: '',
+    quantity: 1
   })
   const [modalState, setModalState] = useState({
     isOpen: false,
@@ -20,9 +21,10 @@ export default function Movements({ movements, setMovements, accessories, respon
     annulReason: '',
     hasCheckin: false
   })
-  const [removeModal, setRemoveModal] = useState({ isOpen: false, movementId: null, reason: '' })
+  const [removeModal, setRemoveModal] = useState({ isOpen: false, movementId: null, soNumber: null, reason: '' })
   const [filterDate, setFilterDate] = useState(new Date().toISOString().split('T')[0])
   const [historyModal, setHistoryModal] = useState({ isOpen: false, movement: null })
+  const [groupVisibility, setGroupVisibility] = useState({}) // Controla quais O.S. estão expandidas
 
   const handleSubmit = (e) => {
     e.preventDefault()
@@ -42,7 +44,7 @@ export default function Movements({ movements, setMovements, accessories, respon
     }
 
     setMovements(prev => [newMovement, ...prev])
-    setFormData({ ...formData, accessoryId: '', soNumber: '' })
+    setFormData({ ...formData, accessoryId: '', soNumber: '', quantity: 1 })
   }
   const handleAnnulleOpen = (id) => {
     const movement = movements.find(m => m.id === id)
@@ -70,8 +72,9 @@ export default function Movements({ movements, setMovements, accessories, respon
         showAlert('Campos Obrigatórios', 'Por favor, preencha quem está devolvendo e o motivo do retorno.', 'warning')
         return
       }
-      setMovements(prev => prev.map(m => 
-        m.id === movementId ? { 
+      setMovements(prev => prev.map(m => {
+        const isTarget = Array.isArray(movementId) ? movementId.includes(m.id) : m.id === movementId;
+        return isTarget ? { 
           ...m, 
           annulled: true, 
           isReturn: true,
@@ -81,26 +84,49 @@ export default function Movements({ movements, setMovements, accessories, respon
             timestamp: new Date().toISOString(),
             author: currentUser?.username || 'Sistema'
           }
-        } : m
-      ))
+        } : m;
+      }))
       setModalState({ ...modalState, isOpen: false })
     } else if (type === 'annul') {
       if (!annulReason.trim()) {
         showAlert('Justificativa Obrigatória', 'Por favor, forneça o motivo da anulação para prosseguir.', 'warning')
         return
       }
-      setMovements(prev => prev.map(m => 
-        m.id === movementId ? { ...m, annulled: true, isReturn: false, reason: annulReason.trim() } : m
-      ))
+      setMovements(prev => prev.map(m => {
+        const isTarget = Array.isArray(movementId) ? movementId.includes(m.id) : m.id === movementId;
+        return isTarget ? { ...m, annulled: true, isReturn: false, reason: annulReason.trim() } : m;
+      }))
       setModalState({ ...modalState, isOpen: false })
     }
   }
 
+  const isAdmin = currentUser?.role === 'admin'
+  const isEstoque = currentUser?.sector === 'estoque'
+  const canManageMovements = isAdmin || isEstoque
+
+  const handleActionOpen = (id, hasCheckin = false) => {
+    setModalState({ 
+      isOpen: true, 
+      movementId: id, 
+      type: null, 
+      hasCheckin,
+      annulReason: '',
+      returnReason: '',
+      returnedBy: '',
+      returnedById: ''
+    })
+  }
+
   const handleRemoveClick = (id) => {
-    if (currentUser?.role !== 'admin') return
+    if (!isAdmin) return
     
-    const movement = movements.find(m => m.id === id)
-    if (!movement.annulled && !movement.checkin) {
+    const ids = Array.isArray(id) ? id : [id];
+    const targets = movements.filter(m => ids.includes(m.id));
+    
+    if (targets.length === 0) return;
+
+    const allRemovable = targets.every(m => m.annulled || m.checkin);
+    if (!allRemovable) {
       showAlert('Ação Não Permitida', 'Apenas registros que já foram ANULADOS ou FINALIZADOS (via Check-in ou Retorno) podem ser removidos do histórico.', 'danger')
       return
     }
@@ -108,28 +134,52 @@ export default function Movements({ movements, setMovements, accessories, respon
     setRemoveModal({
       isOpen: true,
       movementId: id,
+      soNumber: null,
+      reason: ''
+    })
+  }
+
+  const handleRemoveGroupClick = (soNumber) => {
+    if (currentUser?.role !== 'admin') return
+    
+    const groupItems = movements.filter(m => m.soNumber === soNumber && !m.isDeleted)
+    const canRemoveAll = groupItems.every(m => m.annulled || m.checkin)
+    
+    if (!canRemoveAll) {
+      showAlert('Ação Não Permitida', 'Para remover a O.S. inteira do histórico, todos os seus registros individuais devem estar ANULADOS ou FINALIZADOS.', 'danger')
+      return
+    }
+
+    setRemoveModal({
+      isOpen: true,
+      movementId: null,
+      soNumber: soNumber,
       reason: ''
     })
   }
 
   const handleConfirmRemove = async () => {
-    const { movementId, reason } = removeModal
+    const { movementId, soNumber, reason } = removeModal
     
     if (!reason.trim()) {
       showAlert('Campo Obrigatório', 'A justificativa é obrigatória para realizar a remoção lógica deste registro.', 'warning')
       return
     }
 
-    setMovements(prev => prev.map(m => 
-      m.id === movementId ? { 
-        ...m, 
-        isDeleted: true, 
-        deletionReason: reason.trim(),
-        deletionTimestamp: new Date().toISOString(),
-        deletedBy: currentUser.username
-      } : m
-    ))
-    setRemoveModal({ isOpen: false, movementId: null, reason: '' })
+    setMovements(prev => prev.map(m => {
+      const isTargetId = Array.isArray(movementId) ? movementId.includes(m.id) : m.id === movementId;
+      if ((soNumber && m.soNumber === soNumber) || (movementId && isTargetId)) {
+        return { 
+          ...m, 
+          isDeleted: true, 
+          deletionReason: reason.trim(),
+          deletionTimestamp: new Date().toISOString(),
+          deletedBy: currentUser.username
+        }
+      }
+      return m
+    }))
+    setRemoveModal({ isOpen: false, movementId: null, soNumber: null, reason: '' })
   }
 
   const getAccessoryLabel = (id) => {
@@ -158,7 +208,7 @@ export default function Movements({ movements, setMovements, accessories, respon
       label: 'Saída Registrada',
       at: m.timestamp,
       by: m.author,
-      desc: `Acessório retirado para O.S: ${m.soNumber || 'Não informada'}`
+      desc: `Acessório retirado para O.S: ${m.soNumber || 'Não informada'} | Qtd: ${m.quantity || 1}`
     })
 
     // 2. Registro de Retorno
@@ -209,6 +259,76 @@ export default function Movements({ movements, setMovements, accessories, respon
     return log.sort((a, b) => new Date(b.at) - new Date(a.at))
   }
 
+  const toggleOSVisibility = (osNumber) => {
+    setGroupVisibility(prev => ({ ...prev, [osNumber]: !prev[osNumber] }))
+  }
+
+  // Agrupamento de Movimentações por O.S. com Unificação de Itens
+  const groupedMovements = React.useMemo(() => {
+    const groups = []
+    const osMap = {}
+
+    // 1. Filtrar e Ordenar a base toda
+    const sortedAndFiltered = [...movements]
+      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+      .filter(m => {
+        if (m.isDeleted) return false 
+        if (!filterDate) return true
+        const mDate = new Date(m.timestamp).toISOString().split('T')[0]
+        return mDate === filterDate
+      })
+
+    // 2. Agrupar por O.S.
+    sortedAndFiltered.forEach(m => {
+      const soNumber = (m.soNumber || '').trim()
+      if (soNumber && soNumber !== '-') {
+        if (!osMap[soNumber]) {
+          osMap[soNumber] = {
+            isGroup: true,
+            id: `group-${soNumber}`,
+            soNumber: soNumber,
+            timestamp: m.timestamp, // Guarda o mais recente
+            author: m.author, // Pega o autor da primeira iteração (mais recente)
+            items: []
+          }
+          groups.push(osMap[soNumber])
+        }
+        osMap[soNumber].items.push(m)
+      } else {
+        groups.push({
+          isGroup: false,
+          id: m.id,
+          timestamp: m.timestamp,
+          author: m.author,
+          items: [m]
+        })
+      }
+    })
+
+    // 3. Unificar itens idênticos dentro de cada grupo para visualização
+    groups.forEach(group => {
+      const unified = {};
+      group.items.forEach(item => {
+        // Chave de unificação: Acessório + Status (Checkin, Anulado, Retorno, Vínculo)
+        const key = `${item.accessoryId}-${item.isReturn ? 'R' : 'C'}-${item.annulled ? 'A' : 'V'}-${item.checkin ? 'Y' : 'N'}-${item.attachmentStatus}`;
+        
+        if (!unified[key]) {
+          unified[key] = { ...item, originalIds: [item.id] };
+        } else {
+          unified[key].quantity = (unified[key].quantity || 1) + (item.quantity || 1);
+          unified[key].originalIds.push(item.id);
+          // Manter o timestamp mais recente para exibição
+          if (new Date(item.timestamp) > new Date(unified[key].timestamp)) {
+            unified[key].timestamp = item.timestamp;
+          }
+        }
+      });
+      group.unifiedItems = Object.values(unified);
+    });
+
+    return groups;
+  }, [movements, filterDate]);
+
   return (
     <div className="tab-content relative">
       <ConfirmModal 
@@ -222,7 +342,7 @@ export default function Movements({ movements, setMovements, accessories, respon
         onInputChange={(val) => setRemoveModal({ ...removeModal, reason: val })}
         inputPlaceholder="Ex: Registro duplicado, erro no sistema..."
         onConfirm={handleConfirmRemove}
-        onCancel={() => setRemoveModal({ isOpen: false, movementId: null, reason: '' })}
+        onCancel={() => setRemoveModal({ isOpen: false, movementId: null, soNumber: null, reason: '' })}
       />
       {/* Modal Sobreposto */}
       {modalState.isOpen && (
@@ -319,14 +439,19 @@ export default function Movements({ movements, setMovements, accessories, respon
               </div>
             )}
 
-            <button 
-              className="btn-primary" 
-              style={{ width: '100%', marginTop: '1rem', opacity: !modalState.type ? 0.5 : 1 }}
-              onClick={handleModalSubmit}
-              disabled={!modalState.type}
-            >
-              Confirmar {modalState.type === 'return' ? 'Retorno' : modalState.type === 'annul' ? 'Anulação' : 'Ação'}
-            </button>
+            <div className="modal-footer" style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', padding: 0 }}>
+              <button 
+                className="btn-primary" 
+                style={{ width: '100%', opacity: !modalState.type ? 0.5 : 1 }}
+                onClick={handleModalSubmit}
+                disabled={!modalState.type}
+              >
+                Confirmar {modalState.type === 'return' ? 'Retorno' : modalState.type === 'annul' ? 'Anulação' : 'Ação'}
+              </button>
+              <button className="btn-cancel" style={{ width: '100%' }} onClick={() => setModalState({ ...modalState, isOpen: false })}>
+                Cancelar
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -363,14 +488,26 @@ export default function Movements({ movements, setMovements, accessories, respon
             </div>
           </div>
 
-          <div className="input-group">
-            <label>Ordem de Serviço (Opcional)</label>
-            <input 
-              type="text" 
-              value={formData.soNumber}
-              onChange={(e) => setFormData({ ...formData, soNumber: e.target.value })}
-              placeholder="Ex: OS-9988"
-            />
+          <div className="grid-2">
+            <div className="input-group">
+              <label>Ordem de Serviço (Opcional)</label>
+              <input 
+                type="text" 
+                value={formData.soNumber}
+                onChange={(e) => setFormData({ ...formData, soNumber: e.target.value })}
+                placeholder="Ex: OS-9988"
+              />
+            </div>
+            <div className="input-group">
+              <label>Quantidade de Itens</label>
+              <input 
+                type="number" 
+                min="1"
+                value={formData.quantity}
+                onChange={(e) => setFormData({ ...formData, quantity: parseInt(e.target.value) || 1 })}
+                placeholder="Padrão: 1"
+              />
+            </div>
           </div>
 
           <button type="submit" className="btn-primary" style={{ width: '100%', marginTop: '1rem' }}>
@@ -421,85 +558,268 @@ export default function Movements({ movements, setMovements, accessories, respon
               </tr>
             </thead>
             <tbody>
-              {[...movements]
-                .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
-                .filter(m => {
-                  if (m.isDeleted) return false 
-                  if (!filterDate) return true
-                  const mDate = new Date(m.timestamp).toISOString().split('T')[0]
-                  return mDate === filterDate
-                })
-                .map((m, index) => (
-                <tr 
-                  key={m.id} 
-                  className={`row-animate ${m.annulled ? 'row-annulled' : ''} ${m.checkin ? 'row-checked-in' : ''}`}
-                  style={{ animationDelay: `${index * 50}ms` }}
-                >
-                  <td style={{ fontSize: '0.85rem', fontWeight: 500 }}>{formatDate(m.timestamp)}</td>
-                  <td style={{ fontWeight: 500 }}>
-                    <div className="movement-accessory-cell">
-                      <span>{getAccessoryLabel(m.accessoryId)}</span>
-                      {(m.checkin || m.annulled || m.isReturn) && (
-                        <button 
-                          className="btn-history-trigger-v2" 
-                          title="Ver Timeline Completa"
-                          onClick={() => setHistoryModal({ isOpen: true, movement: m })}
-                        >
-                          <Clock size={16} />
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                  <td style={{ fontWeight: 600 }}>{getResponsibleName(m.responsibleId)}</td>
-                  <td>
-                    <code className={`
-                      ${m.attachmentStatus === 'ok' ? 'os-code-linked' : 'os-code-standard'} 
-                      ${(m.attachmentStatus !== 'ok' && m.soNumber && m.soNumber !== '-') ? 'os-code-pulse' : ''}
-                    `}>
-                      {m.soNumber || '-'}
-                    </code>
-                  </td>
-                  <td>
-                    <div className="badge badge-author">
-                      <User size={12} /> {m.author || 'Sistema'}
-                    </div>
-                  </td>
-                  <td>
-                    {m.isReturn ? (
-                      <span className="badge badge-return">RETORNO</span>
-                    ) : (
-                      <span className="badge badge-checkout">SAÍDA</span>
-                    )}
-                  </td>
-                  <td style={{ textAlign: 'center' }}>
-                    <div style={{ display: 'flex', gap: '0.8rem', justifyContent: 'center', alignItems: 'center' }}>
-                      {!m.annulled ? (
-                        <button 
-                          onClick={() => handleAnnulleOpen(m.id)} 
-                          className="btn-icon-danger"
-                          title="Anular ou Registrar Retorno"
-                          style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', transition: 'transform 0.2s', display: 'flex', alignItems: 'center' }}
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      ) : (
-                        <span className="status-annulled-tag">{m.isReturn ? 'FINALIZADO' : 'ANULADO'}</span>
-                      )}
-
-                      {currentUser?.role === 'admin' && (
-                        <button 
-                          onClick={() => handleRemoveClick(m.id)} 
-                          className="btn-icon-danger"
-                          title="Remover Registro do Histórico"
-                          style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', transition: 'transform 0.2s', display: 'flex', alignItems: 'center' }}
-                        >
-                          <XCircle size={18} />
-                        </button>
-                      )}
-                    </div>
+              {groupedMovements.length === 0 ? (
+                <tr>
+                  <td colSpan="7" style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+                    Nenhuma movimentação encontrada.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                groupedMovements.map((group, index) => {
+                  const groupResps = [...new Set(group.items.map(m => getResponsibleName(m.responsibleId)))];
+                  const groupAuthors = [...new Set(group.items.map(m => m.author || 'Sistema'))];
+                  
+                  return (
+                    <React.Fragment key={group.id}>
+                    {/* Linha Mestre da Movimentação / O.S. */}
+                    <tr 
+                      className={`row-animate ${
+                        group.items.every(m => m.annulled && !m.isReturn) ? 'row-annulled' : 
+                        group.items.every(m => m.isReturn) ? 'row-returned' : 
+                        group.items.every(m => m.checkin) ? 'row-finalized' : ''
+                      }`}
+                      style={{ 
+                        animationDelay: `${index * 40}ms`, 
+                        background: group.isGroup ? 'rgba(56, 189, 248, 0.03)' : undefined,
+                        borderLeft: group.isGroup ? '3px solid var(--accent)' : undefined
+                      }}
+                    >
+                      <td style={{ fontSize: '0.85rem', fontWeight: 500 }}>{formatDate(group.timestamp)}</td>
+                      <td style={{ fontWeight: 500 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                          <span style={{ color: group.unifiedItems.length > 1 ? 'var(--accent)' : 'inherit' }}>
+                            {group.unifiedItems.length === 1 
+                              ? (
+                                <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <strong style={{ color: 'var(--accent)', fontSize: '0.9rem' }}>[{group.unifiedItems[0].quantity || 1}x]</strong>
+                                  {getAccessoryLabel(group.unifiedItems[0].accessoryId)}
+                                  {/* Alerta de Divergência de Quantidade */}
+                                  {group.unifiedItems[0].attachmentStatus === 'mismatch' && (
+                                    <AlertTriangle size={16} style={{ color: '#fbbf24' }} title="Quantidade no anexo diverge do registro" />
+                                  )}
+                                </span>
+                              )
+                              : `${group.unifiedItems.length} Itens (Unificados)`
+                            }
+                          </span>
+                          {group.unifiedItems.length === 1 && (group.unifiedItems[0].checkin || group.unifiedItems[0].annulled || group.unifiedItems[0].isReturn) && (
+                            <button 
+                              className="btn-history-trigger-v2" 
+                              title="Ver Timeline Completa"
+                              onClick={() => setHistoryModal({ isOpen: true, movement: group.unifiedItems[0] })}
+                            >
+                              <Clock size={14} />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                      <td style={{ fontWeight: 600 }}>
+                        {groupResps.length > 1 
+                          ? <span style={{ color: 'var(--text-secondary)', fontStyle: 'italic' }}>Vários Responsáveis</span>
+                          : groupResps[0]
+                        }
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          {group.items.length > 1 && (
+                            <button 
+                              onClick={() => toggleOSVisibility(group.id)} 
+                              title="Ocultar/Exibir Detalhes" 
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center' }}
+                            >
+                              { (groupVisibility[group.id] !== undefined ? groupVisibility[group.id] : false) ? <EyeOff size={14}/> : <Eye size={14}/> }
+                            </button>
+                          )}
+                          {group.soNumber && group.soNumber !== '-' ? (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <code className={`
+                                ${group.items.every(m => m.checkin) ? 'os-code-linked' : 'os-code-standard'} 
+                                ${group.items.some(m => m.attachmentStatus !== 'ok') ? 'os-code-pulse' : ''}
+                              `}>
+                                {group.soNumber}
+                              </code>
+                              {group.items.every(m => m.attachmentStatus === 'ok') && (
+                                <ClipboardCheck size={14} style={{ color: '#10b981' }} title="Anexo Vinculado" />
+                              )}
+                            </div>
+                          ) : (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>Avulso</span>
+                              {group.items.every(m => m.attachmentStatus === 'ok') && (
+                                <ClipboardCheck size={14} style={{ color: '#10b981' }} title="Anexo Vinculado" />
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td>
+                        <div className="badge badge-author">
+                          <User size={12} /> {groupAuthors.length > 1 ? 'Múltiplos' : groupAuthors[0]}
+                        </div>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                            {group.isGroup && group.items.length > 1 ? 'Agrupamento O.S.' : 'Saída Individual'}
+                          </span>
+                          {group.items.every(item => item.checkin) && !group.items[0].annulled && (
+                            <span className="status-checkin-tag">
+                              <CheckCircle2 size={12} /> Check-in
+                            </span>
+                          )}
+                          {group.isGroup && group.items.length > 1 && group.items.some(item => item.checkin) && !group.items.every(item => item.checkin) && (
+                            <span className="status-checkin-tag" style={{ opacity: 0.7, background: 'rgba(56, 189, 248, 0.1)', color: 'var(--accent)', borderColor: 'rgba(56, 189, 248, 0.2)' }}>
+                              {group.items.filter(item => item.checkin).length}/{group.items.length} Check-ins
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        <div style={{ display: 'flex', gap: '0.8rem', justifyContent: 'center', alignItems: 'center' }}>
+                            <button 
+                              onClick={() => {
+                                // Se for um registro individual ou um grupo unificado em uma única linha
+                                if (!group.isGroup || group.unifiedItems.length === 1) {
+                                  const m = group.unifiedItems[0];
+                                  const hasCheckin = movements.some(mov => mov.type === 'checkin' && m.originalIds.includes(mov.originalCheckoutId) && !mov.annulled);
+                                  handleActionOpen(m.originalIds, hasCheckin);
+                                } else {
+                                  showAlert('Ação em Bloco', 'Para anular ou registrar retorno de uma O.S. completa com múltiplos acessórios, expanda os detalhes e realize a ação por item.', 'info');
+                                }
+                              }}
+                              className="btn-icon" 
+                              title="Ação (Retorno ou Anulação)"
+                            >
+                              <XCircle size={18} />
+                            </button>
+                          {isAdmin && (
+                            <button 
+                              onClick={() => {
+                                if (group.isGroup && group.unifiedItems.length > 1) {
+                                  handleRemoveGroupClick(group.soNumber);
+                                } else {
+                                  handleRemoveClick(group.unifiedItems[0].originalIds);
+                                }
+                              }} 
+                              className="btn-icon-danger"
+                              title={(group.isGroup && group.unifiedItems.length > 1) ? "Remover O.S. Completa do Histórico" : "Remover Registro(s)"}
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+
+                    {/* Sub-linhas detalhadas (exibe itens unificados para maior clareza) */}
+                    {group.unifiedItems.length > 0 && group.unifiedItems.map((m, i) => {
+                      const isExpanded = (groupVisibility[group.id] !== undefined ? groupVisibility[group.id] : false);
+                      if (!isExpanded) return null;
+
+                      return (
+                        <tr 
+                          key={m.id} 
+                          className={`row-animate ${m.annulled && !m.isReturn ? 'row-annulled' : ''} ${m.isReturn ? 'row-returned' : ''} ${(m.checkin || m.attachmentStatus === 'ok') ? 'row-finalized' : ''}`}
+                          style={{ 
+                            animationDelay: `${(index * 50) + (i * 20)}ms`,
+                            background: 'rgba(255,255,255,0.01)',
+                            borderBottom: i === group.unifiedItems.length - 1 ? '2px solid var(--border)' : '1px dotted var(--border)'
+                          }}
+                        >
+                          <td style={{ paddingLeft: '2.5rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              <div style={{ width: '12px', height: '12px', borderLeft: '2px solid var(--border)', borderBottom: '2px solid var(--border)', borderRadius: '0 0 0 4px', marginTop: '-12px' }} />
+                              <span style={{ fontSize: '0.85rem', fontWeight: 500 }}>{formatDate(m.timestamp)}</span>
+                            </div>
+                          </td>
+                          <td style={{ fontWeight: 500 }}>
+                            <div className="movement-accessory-cell">
+                              <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <strong style={{ color: 'var(--accent)', fontSize: '0.8rem' }}>[{m.quantity || 1}x]</strong>
+                                {getAccessoryLabel(m.accessoryId)}
+                                {m.attachmentStatus === 'mismatch' && (
+                                  <AlertTriangle size={14} style={{ color: '#fbbf24' }} title="Quantidade no anexo diverge do registro" />
+                                )}
+                              </span>
+                              {(m.checkin || m.annulled || m.isReturn) && (
+                                <button 
+                                  className="btn-history-trigger-v2" 
+                                  title="Ver Timeline Completa"
+                                  onClick={() => setHistoryModal({ isOpen: true, movement: m })}
+                                >
+                                  <Clock size={16} />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                           <td style={{ fontWeight: 600, fontSize: '0.8rem' }}>
+                             {groupResps.length > 1 ? getResponsibleName(m.responsibleId) : <span style={{ opacity: 0.15 }}>-</span>}
+                           </td>
+                          <td>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <code className={`
+                                ${m.checkin ? 'os-code-linked' : 'os-code-standard'} 
+                                ${(m.attachmentStatus !== 'ok' && m.soNumber && m.soNumber !== '-' && m.soNumber !== 'S/N') ? 'os-code-pulse' : ''}
+                              `}>
+                                {m.soNumber && m.soNumber !== '-' ? m.soNumber : 'Avulso'}
+                              </code>
+                              {m.attachmentStatus === 'ok' && <ClipboardCheck size={14} style={{ color: '#10b981' }} title="Anexo Vinculado" />}
+                            </div>
+                          </td>
+                           <td>
+                             <div className="badge badge-author" style={{ opacity: groupAuthors.length > 1 ? 1 : 0.4 }}>
+                               <User size={12} /> {groupAuthors.length > 1 ? (m.author || 'Sistema') : '-'}
+                             </div>
+                           </td>
+                          <td>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              {m.isReturn ? (
+                                <span className="badge badge-return">RETORNO</span>
+                              ) : (
+                                <span className="badge badge-checkout">SAÍDA</span>
+                              )}
+                              {m.checkin && !m.annulled && (
+                                <span className="status-checkin-tag">
+                                  <CheckCircle2 size={12} /> Check-in
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td style={{ textAlign: 'center' }}>
+                            <div style={{ display: 'flex', gap: '0.8rem', justifyContent: 'center', alignItems: 'center' }}>
+                              {canManageMovements && !m.annulled ? (
+                                <button 
+                                  onClick={() => {
+                                    const hasCheckin = movements.some(mov => mov.type === 'checkin' && m.originalIds.includes(mov.originalCheckoutId) && !mov.annulled);
+                                    handleActionOpen(m.originalIds, hasCheckin);
+                                  }} 
+                                  className="btn-icon-danger"
+                                  title="Anular ou Registrar Retorno"
+                                >
+                                  <XCircle size={18} />
+                                </button>
+                              ) : (
+                                m.annulled && <span className="status-annulled-tag">{m.isReturn ? 'FINALIZADO' : 'ANULADO'}</span>
+                              )}
+
+                              {currentUser?.role === 'admin' && (
+                                <button 
+                                  onClick={() => handleRemoveClick(m.originalIds)} 
+                                  className="btn-icon-danger"
+                                  title="Remover Registro Unificado"
+                                >
+                                  <Trash2 size={18} />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </React.Fragment>
+                    )
+                })
+              )}
             </tbody>
           </table>
         </div>

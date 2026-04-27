@@ -48,13 +48,15 @@ export const updateRecord = async (storeName, id, updates) => {
       const index = data.findIndex(item => item && item.id === id);
       if (index !== -1) {
         data[index] = { ...data[index], ...updates };
-        await set(ref(dbFB, storeName), data);
+        const safeData = JSON.parse(JSON.stringify(data));
+        await set(ref(dbFB, storeName), safeData);
       }
     } else {
       // Se o Firebase transformou em objeto (chaves numéricas ou IDs)
       const key = Object.keys(data).find(k => data[k].id === id);
       if (key) {
-        await set(ref(dbFB, `${storeName}/${key}`), { ...data[key], ...updates });
+        const safeUpdates = JSON.parse(JSON.stringify({ ...data[key], ...updates }));
+        await set(ref(dbFB, `${storeName}/${key}`), safeUpdates);
       }
     }
     console.log(`Registro ${id} atualizado em ${storeName}.`);
@@ -68,8 +70,10 @@ export const saveData = async (storeName, data) => {
   try {
     // Filtra nulos que o Firebase pode inserir ao deletar índices de array
     const cleanData = Array.isArray(data) ? data.filter(i => i !== null) : data;
-    await set(ref(dbFB, storeName), cleanData);
-    localStorage.setItem(storeName, JSON.stringify(cleanData));
+    // Remove undefined values to prevent Firebase errors
+    const safeData = JSON.parse(JSON.stringify(cleanData));
+    await set(ref(dbFB, storeName), safeData);
+    localStorage.setItem(storeName, JSON.stringify(safeData));
     console.log(`Dados sincronizados em Firebase e LocalStorage para ${storeName}.`);
   } catch (error) {
     console.error(`Erro ao salvar array em ${storeName}:`, error);

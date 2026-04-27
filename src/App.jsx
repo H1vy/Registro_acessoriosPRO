@@ -61,71 +61,115 @@ function App() {
       let availableAttachments = [];
       serviceOrders.filter(so => !so.annulled && !so.hidden).forEach(so => {
         (so.items || []).forEach(item => {
+          // Calcula dateKey usando data LOCAL (igual ao mDate dos movimentos) para evitar desvio de fuso
+          let soDateKey = so.withdrawalDate || null;
+          if (!soDateKey && so.attachedAt) {
+            const soD = new Date(so.attachedAt);
+            soDateKey = `${soD.getFullYear()}-${String(soD.getMonth()+1).padStart(2,'0')}-${String(soD.getDate()).padStart(2,'0')}`;
+          }
           availableAttachments.push({
             ...so,
-            itemCode: item.code,
-            dateKey: so.withdrawalDate || (so.attachedAt ? so.attachedAt.split('T')[0] : null)
+            itemCode: String(item.code || '').trim().toLowerCase(),
+            itemQty: Number(item.quantity || 1),
+            dateKey: soDateKey,
+            cleanOS: (so.osNumber && String(so.osNumber).trim() !== '-' && String(so.osNumber).trim().toUpperCase() !== 'S/N')
+                     ? String(so.osNumber).trim().toLowerCase() : null
           });
         });
       });
 
+      // 2. IDs de anexos válidos para manter a consistência caso precisemos no futuro
+      const validAttachmentIds = new Set(
+        serviceOrders.filter(so => !so.annulled && !so.hidden).map(so => so.id)
+      );
+
+      // 3. Candidatos: TODOS os movimentos válidos. 
+      //    Re-reconciliamos TUDO do zero para garantir que um item de anexo
+      //    só possa ser consumido uma única vez, mantendo a proporção 1-para-1.
+      const candidateMovements = movements.filter(m => {
+        if (m.isDeleted || (m.type && m.type !== 'checkout') || m.annulled) return false;
+        return true;
+      });
+
+      // 4. Cada movimento é verificado INDIVIDUALMENTE pela sua própria quantidade.
+      //    Regra COM OS  → código + OS + data + qtd do movimento devem ser idênticos ao item do anexo
+      //    Regra AVULSO  → código + data + qtd idênticos; OS do anexo é ignorada
+      //    Processamento em ordem cronológica para garantir resultados determinísticos.
+      const movementResults = {};
+      const sortedCandidates = [...candidateMovements].sort((a, b) => {
+        const tA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+        const tB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+        return tA - tB;
+      });
+
+      sortedCandidates.forEach(m => {
+        const d = m.timestamp ? new Date(m.timestamp) : null;
+        if (!d) {
+          movementResults[m.id] = { targetStatus: 'pending', lastMatch: null };
+          return;
+        }
+        const mDate = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        const acc = accessories.find(a => String(a.id) === String(m.accessoryId));
+        const mCode = acc?.factoryCode ? String(acc.factoryCode).trim().toLowerCase() : null;
+        if (!mCode) { movementResults[m.id] = { targetStatus: 'pending', lastMatch: null }; return; }
+        const mOS = (m.soNumber && String(m.soNumber).trim() !== '-' && String(m.soNumber).trim().toUpperCase() !== 'S/N' && String(m.soNumber).trim().toUpperCase() !== 'AVULSO')
+                    ? String(m.soNumber).trim().toLowerCase() : null;
+        const mQty = Number(m.quantity || 1);
+
+        const matchIndex = availableAttachments.findIndex(a => {
+          if (a.itemCode !== mCode) return false;
+          if (a.dateKey !== mDate) return false;
+          // Permite match se o anexo tiver quantidade igual ou superior ao movimento atual
+          if (a.itemQty < mQty) return false;
+          if (mOS !== null) return mOS === a.cleanOS;
+          return true; // AVULSO: ignora OS do anexo
+        });
+
+        if (matchIndex !== -1) {
+          const matchedItem = availableAttachments[matchIndex];
+          movementResults[m.id] = { targetStatus: 'ok', lastMatch: matchedItem };
+          
+          // Deduz a quantidade do movimento do saldo do anexo no pool
+          matchedItem.itemQty -= mQty;
+          // Remove o item do pool somente se o saldo chegar a zero
+          if (matchedItem.itemQty <= 0) {
+            availableAttachments.splice(matchIndex, 1);
+          }
+        } else {
+          movementResults[m.id] = { targetStatus: 'pending', lastMatch: null };
+        }
+      });
+
+      // 5. Aplica os resultados a cada movimento individualmente
       let changed = false;
       const reconciledMovements = movements.map(m => {
-        if (m.type !== 'checkout' || m.annulled) return m;
-        
-        let mDate = null;
-        if (m.timestamp) {
-          const d = new Date(m.timestamp);
-          mDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-        }
-        
-        const acc = accessories.find(a => String(a.id) === String(m.accessoryId));
-        const mOS = m.soNumber && m.soNumber !== '-' && m.soNumber !== 'S/N' ? String(m.soNumber).trim().toLowerCase() : null;
-        const mCode = acc?.factoryCode ? String(acc.factoryCode).trim().toLowerCase() : null;
+        if (m.isDeleted || (m.type && m.type !== 'checkout') || m.annulled) return m;
+        const result = movementResults[m.id];
+        if (!result) return m;
 
-        // 2. Tenta encontrar o melhor par (Data + Código + O.S.)
-        let matchIndex = -1;
-        
-        if (mCode && mDate) {
-          matchIndex = availableAttachments.findIndex(a => {
-            const aOS = a.osNumber ? String(a.osNumber).trim().toLowerCase() : null;
-            const aCode = a.itemCode ? String(a.itemCode).trim().toLowerCase() : null;
-            const aDate = a.dateKey; // Já está em formato sv-SE (YYYY-MM-DD)
-
-            // Critério 1: Data deve ser idêntica
-            if (aDate !== mDate) return false;
-
-            // Critério 2: Código deve ser idêntico
-            if (aCode !== mCode) return false;
-
-            // Critério 3: O.S.
-            if (mOS) {
-              // Se a saída tem O.S., o anexo DEVE ter a mesma O.S.
-              return aOS === mOS;
-            } else {
-              // Se a saída é S/N, aceitamos qualquer anexo (S/N ou com O.S.) do mesmo dia e código
-              // Pois o usuário pode ter dado saída S/N e depois criado anexo com O.S.
-              return true;
-            }
-          });
-        }
-
-        let targetStatus = matchIndex !== -1 ? 'ok' : 'pending';
-
-        // 3. Se achou, remove do pool para que não seja usado novamente (Mapeamento 1:1)
-        if (matchIndex !== -1) {
-          availableAttachments.splice(matchIndex, 1);
-        }
-
-        if (m.attachmentStatus !== targetStatus) {
+        const { targetStatus, lastMatch } = result;
+        const needsUpdate = m.attachmentStatus !== targetStatus ||
+                           (lastMatch && m.attachmentId !== lastMatch.id) ||
+                           (lastMatch && (lastMatch.checkIn || lastMatch.checkin) && !m.checkin);
+        if (needsUpdate) {
           changed = true;
-          return { ...m, attachmentStatus: targetStatus };
+          const isOsCheckedIn = lastMatch && (lastMatch.checkIn || lastMatch.checkin);
+          return {
+            ...m,
+            attachmentStatus: targetStatus,
+            attachmentId: lastMatch ? lastMatch.id : (targetStatus === 'pending' ? null : m.attachmentId),
+            attachedAt: lastMatch ? lastMatch.attachedAt : (targetStatus === 'pending' ? null : m.attachedAt),
+            attachedBy: lastMatch ? lastMatch.attachedBy : (targetStatus === 'pending' ? null : m.attachedBy),
+            checkin: isOsCheckedIn ? true : m.checkin,
+            checkinAt: isOsCheckedIn ? (lastMatch.checkIn?.at || lastMatch.checkin?.at || lastMatch.checkIn?.timestamp || lastMatch.checkin?.timestamp) : m.checkinAt,
+            checkinBy: isOsCheckedIn ? (lastMatch.checkIn?.user || lastMatch.checkin?.user) : m.checkinBy
+          };
         }
         return m;
       });
 
       if (changed) {
-        handleSetMovements(reconciledMovements);
+        saveData('movements', reconciledMovements);
       }
     }
   }, [movements, serviceOrders, accessories, currentUser]);
@@ -133,6 +177,33 @@ function App() {
   useEffect(() => {
     seedAdminUser()
     migrateUsersSector()
+
+    // Limpeza única v2: remove os 2 registros fantasmas de check-in da aba Part Sales
+    // (GH44-02960A, 25/04/2026 às 22:48:14 e 22:48:39 — filtra por m.checkin.timestamp)
+    if (!localStorage.getItem('ghost_checkin_cleanup_v2')) {
+      getAllData('movements').then(movs => {
+        const ghosts = movs.filter(m => {
+          if (!m || !m.checkin || !m.checkin.timestamp) return false;
+          const d = new Date(m.checkin.timestamp);
+          const dateLocal = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+          const hh = d.getHours(), mm = d.getMinutes(), ss = d.getSeconds();
+          const isTargetDate = dateLocal === '2026-04-25';
+          const isTargetTime = hh === 22 && mm === 48 && (ss === 14 || ss === 39);
+          return isTargetDate && isTargetTime;
+        });
+        if (ghosts.length > 0) {
+          const ghostIds = ghosts.map(g => g.id);
+          const cleaned = movs.filter(m => m && !ghostIds.includes(m.id));
+          saveData('movements', cleaned).then(() => {
+            localStorage.setItem('ghost_checkin_cleanup_v2', '1');
+            console.log(`[Cleanup v2] ${ghosts.length} registro(s) fantasma(s) removido(s):`, ghostIds);
+          });
+        } else {
+          localStorage.setItem('ghost_checkin_cleanup_v2', '1');
+          console.log('[Cleanup v2] Nenhum registro fantasma encontrado. Timestamps nos movimentos:', movs.filter(m => m?.checkin?.timestamp).map(m => m.checkin.timestamp).slice(0,5));
+        }
+      });
+    }
 
     const savedUser = localStorage.getItem('currentUser')
     if (savedUser) {
@@ -153,7 +224,15 @@ function App() {
 
     const unsubAcc    = subscribeToData('accessories', setAccessories)
     const unsubResp   = subscribeToData('responsibles', setResponsibles)
-    const unsubMov    = subscribeToData('movements', setMovements)
+    const unsubMov    = subscribeToData('movements', (movs) => {
+      // Migração: garante que registros criados via Pedidos sem campo 'type' recebam 'checkout'
+      const migrated = movs.map(m => {
+        if (!m.type && m.isOrderWithdrawal) return { ...m, type: 'checkout', attachmentStatus: m.attachmentStatus || 'pending' };
+        if (!m.type && m.accessoryId) return { ...m, type: 'checkout' };
+        return m;
+      });
+      setMovements(migrated);
+    })
     const unsubUsers  = subscribeToData('users', setUsers)
     const unsubOrders = subscribeToData('orders', setOrders)
     const unsubServiceOrders = subscribeToData('service_orders', setServiceOrders)
@@ -485,10 +564,9 @@ function App() {
                 <ClipboardList size={20} />
                 <span className="nav-text">Movimentação</span>
                 {movements.filter(m => {
-                  if (m.type !== 'checkout' || m.annulled || m.attachmentStatus === 'ok' || !m.timestamp) return false;
-                  const d = new Date(m.timestamp);
-                  const mDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-                  return mDate >= '2026-04-22';
+                  if (m.isDeleted || m.type !== 'checkout' || m.annulled || m.attachmentStatus === 'ok' || !m.timestamp) return false;
+                  const cutoff = localStorage.getItem('notif_cutoff') || new Date().toISOString();
+                  return m.timestamp > cutoff;
                 }).length > 0 && (
                   <span className="tab-notification-badge" />
                 )}
@@ -543,14 +621,14 @@ function App() {
                 <FileText size={20} />
                 <span className="nav-text">Anexos OS</span>
                 {movements.filter(m => {
-                  if (m.type !== 'checkout' || m.annulled || m.attachmentStatus === 'ok' || !m.timestamp) return false;
-                  const d = new Date(m.timestamp);
-                  const mDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-                  return mDate >= '2026-04-22';
+                  if (m.isDeleted || m.type !== 'checkout' || m.annulled || m.attachmentStatus === 'ok' || !m.timestamp) return false;
+                  const cutoff = localStorage.getItem('notif_cutoff') || new Date().toISOString();
+                  return m.timestamp > cutoff;
                 }).length > 0 && (
                   <span className="tab-notification-badge" />
                 )}
               </button>
+
             )}
             {availableTabs.includes('admin') && (
               <button
@@ -635,15 +713,23 @@ function App() {
 
 function PendingNotifications({ movements, accessories, setActiveTab }) {
   const [isOpen, setIsOpen] = useState(false);
+
+  // Cutoff: oculta pendências anteriores ao momento em que o filtro foi ativado.
+  // Na primeira execução, salva "agora" como cutoff, ignorando as pendências já existentes.
+  const cutoff = React.useMemo(() => {
+    let ts = localStorage.getItem('notif_cutoff');
+    if (!ts) {
+      ts = new Date().toISOString();
+      localStorage.setItem('notif_cutoff', ts);
+    }
+    return ts;
+  }, []);
+
   const pending = movements.filter(m => {
-    if (m.type !== 'checkout' || m.annulled || m.attachmentStatus === 'ok' || !m.timestamp) return false;
-    const d = new Date(m.timestamp);
-    const mDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    return mDate >= '2026-04-22';
+    if (m.isDeleted || m.type !== 'checkout' || m.annulled || m.attachmentStatus === 'ok' || !m.timestamp) return false;
+    // Só exibe pendências POSTERIORES ao cutoff (registros novos)
+    return m.timestamp > cutoff;
   });
-  
-  // Debug para acompanhar o estado
-  console.log(`[Notificações] Total Pendentes: ${pending.length}`);
 
   return (
     <div className="notification-container">
