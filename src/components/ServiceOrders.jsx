@@ -163,12 +163,16 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
     let availablePool = [...pdfPool];
 
     // 4. Cada movimento é verificado em DUAS PASSAGENS.
-    const processPass = (isExactOnly) => {
+    const processPass = (isExactOnly, passType) => {
       candidateMovements.forEach(m => {
         if (movementResults[m.id] === 'ok') return;
 
         const mOS = (m.soNumber && String(m.soNumber).trim() !== '-' && String(m.soNumber).trim().toUpperCase() !== 'S/N' && String(m.soNumber).trim().toUpperCase() !== 'AVULSO')
           ? String(m.soNumber).trim().toLowerCase().replace(/[^a-z0-9]/g, '').replace(/^0+/, '') : null;
+
+        // FILTRO DE PASSAGEM: Prioridade para O.S.
+        if (passType === 'os' && mOS === null) return;
+        if (passType === 'avulso' && mOS !== null) return;
 
         // Regra de O.S. idêntica ao App.jsx
         if (mOS !== null) {
@@ -177,7 +181,6 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
             return;
           }
         }
-        // Se mOS é null (Avulso), ele pode casar com qualquer OS do PDF
 
         const acc = accessories.find(acc => String(acc.id) === String(m.accessoryId));
         const mCode = acc?.factoryCode ? String(acc.factoryCode).trim().toLowerCase().replace(/[^a-z0-9]/g, '') : null;
@@ -199,14 +202,17 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
             availablePool.splice(pdfIdx, 1);
           }
           movementResults[m.id] = 'ok';
-        } else if (!isExactOnly) {
+        } else if (passType === 'avulso' && !isExactOnly) {
           movementResults[m.id] = 'pending';
         }
       });
     };
 
-    processPass(true);  // Passagem 1: Matches exatos
-    processPass(false); // Passagem 2: Matches por saldo
+    // ORDEM DE PRIORIDADE CRITICAL:
+    processPass(true, 'os');
+    processPass(true, 'avulso');
+    processPass(false, 'os');
+    processPass(false, 'avulso');
 
     // 5. Aplica o resultado a cada movimento
     updatedMovements = updatedMovements.map(m => {

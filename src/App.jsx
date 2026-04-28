@@ -135,7 +135,7 @@ function App() {
         return String(a.id).localeCompare(String(b.id)); // Desempate estável
       });
 
-      const processPass = (isExactOnly) => {
+      const processPass = (isExactOnly, passType) => {
         sortedCandidates.forEach(m => {
           if (movementResults[m.id]?.targetStatus === 'ok') return;
 
@@ -153,6 +153,11 @@ function App() {
           
           const mOS = (m.soNumber && String(m.soNumber).trim() !== '-' && String(m.soNumber).trim().toUpperCase() !== 'S/N' && String(m.soNumber).trim().toUpperCase() !== 'AVULSO')
                       ? String(m.soNumber).trim().toLowerCase().replace(/[^a-z0-9]/g, '').replace(/^0+/, '') : null;
+          
+          // FILTRO DE PASSAGEM: Prioridade para O.S.
+          if (passType === 'os' && mOS === null) return;
+          if (passType === 'avulso' && mOS !== null) return;
+
           const rawMQty = String(m.quantity || 1);
           const mQty = parseInt(rawMQty.replace(/\D/g, '')) || 1;
 
@@ -163,13 +168,13 @@ function App() {
             if (a.dateKey !== mDate) return false;
             
             // Match de O.S.
-            // Se o movimento tem O.S., DEVE ser igual ao anexo.
-            // Se o movimento é AVULSO, ele só pode casar com anexos sem O.S. (ou marcados como Avulso)
             if (mOS !== null) {
+              // Movimento com OS: deve ser idêntico ao anexo
               if (mOS !== a.cleanOS) return false;
+            } else {
+              // Movimento Avulso: Ignoramos a OS do anexo para permitir vínculo flexível, 
+              // mas este movimento só roda nas passagens 2 e 4 (após as OS oficiais terem prioridade).
             }
-            // Se o movimento é AVULSO (mOS === null), ignoramos a checagem de O.S. do anexo
-            // para permitir o vínculo por Código + Data + Quantidade.
             
             if (isExactOnly) {
               return a.itemQty === mQty;
@@ -186,14 +191,22 @@ function App() {
             if (matchedItem.itemQty <= 0) {
               sortedPool.splice(matchIndex, 1);
             }
-          } else if (!isExactOnly) {
+          } else if (passType === 'avulso' && !isExactOnly) {
+            // Só marca como pendente definitivo após a última passagem (Avulso Parcial)
             movementResults[m.id] = { targetStatus: 'pending', lastMatch: null };
           }
         });
       };
 
-      processPass(true);  // Exatos
-      processPass(false); // Parciais
+      // ORDEM DE PRIORIDADE CRITICAL:
+      // 1. Matches Exatos com O.S. (Garante que OS 777333 pegue o anexo 777333)
+      // 2. Matches Exatos Avulsos (O que sobrar e bater código/data)
+      // 3. Matches Parciais com O.S. (Para quantidades quebradas)
+      // 4. Matches Parciais Avulsos (Última tentativa)
+      processPass(true, 'os');
+      processPass(true, 'avulso');
+      processPass(false, 'os');
+      processPass(false, 'avulso');
 
       // 5. Aplica os resultados a cada movimento individualmente
       let changed = false;
