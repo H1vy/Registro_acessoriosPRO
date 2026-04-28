@@ -123,14 +123,14 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
     // Normaliza a OS do formulário (null = avulso/S/N)
     const rawFormOS = String(osNumber || '').trim().toUpperCase();
     const osInForm = (rawFormOS && rawFormOS !== '-' && rawFormOS !== 'S/N' && rawFormOS !== 'AVULSO')
-      ? String(osNumber).trim().toLowerCase().replace(/^0+/, '') : null;
+      ? rawFormOS.toLowerCase().replace(/[^a-z0-9]/g, '').replace(/^0+/, '') : null;
 
     // 1. Pool de itens do PDF (código normalizado + quantidade robusta)
     const pdfPool = items.map(item => {
       const rawQty = String(item.quantity || 1);
       const parsedQty = parseInt(rawQty.replace(/\D/g, '')) || 1;
       return {
-        code: String(item.code || '').trim().toLowerCase(),
+        code: String(item.code || '').trim().toLowerCase().replace(/[^a-z0-9]/g, ''),
         quantity: parsedQty
       };
     });
@@ -168,7 +168,7 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
         if (movementResults[m.id] === 'ok') return;
 
         const mOS = (m.soNumber && String(m.soNumber).trim() !== '-' && String(m.soNumber).trim().toUpperCase() !== 'S/N' && String(m.soNumber).trim().toUpperCase() !== 'AVULSO')
-          ? String(m.soNumber).trim().toLowerCase().replace(/^0+/, '') : null;
+          ? String(m.soNumber).trim().toLowerCase().replace(/[^a-z0-9]/g, '').replace(/^0+/, '') : null;
 
         // Regra de O.S. idêntica ao App.jsx
         if (mOS !== null) {
@@ -179,14 +179,16 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
         }
         // Se mOS é null (Avulso), ele pode casar com qualquer OS do PDF
 
-        const mCode = accessories.find(acc => String(acc.id) === String(m.accessoryId))?.factoryCode?.trim().toLowerCase();
+        const acc = accessories.find(acc => String(acc.id) === String(m.accessoryId));
+        const mCode = acc?.factoryCode ? String(acc.factoryCode).trim().toLowerCase().replace(/[^a-z0-9]/g, '') : null;
         if (!mCode) { movementResults[m.id] = 'pending'; return; }
 
         const rawMQty = String(m.quantity || 1);
         const mQty = parseInt(rawMQty.replace(/\D/g, '')) || 1;
 
         const pdfIdx = availablePool.findIndex(p => {
-          if (p.code !== mCode) return false;
+          const pCode = String(p.code || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+          if (pCode !== mCode) return false;
           return isExactOnly ? p.quantity === mQty : p.quantity >= mQty;
         });
 

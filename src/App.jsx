@@ -63,8 +63,9 @@ function App() {
         (so.items || []).forEach(item => {
           // Normalização robusta da O.S. (Removendo zeros à esquerda e tratando "AVULSO" como null)
           const rawOS = String(so.osNumber || '').trim().toUpperCase();
+          // Normalização Hyper-Resilient: remove tudo que não é letra/número e tira zeros à esquerda
           const cleanOS = (rawOS && rawOS !== '-' && rawOS !== 'S/N' && rawOS !== 'AVULSO')
-                           ? String(so.osNumber).trim().toLowerCase().replace(/^0+/, '') : null;
+                           ? rawOS.toLowerCase().replace(/[^a-z0-9]/g, '').replace(/^0+/, '') : null;
 
           // Normalização robusta de Quantidade (Extraindo apenas números para lidar com "2X" ou "3 itens")
           const rawQty = String(item.quantity || 1);
@@ -85,7 +86,8 @@ function App() {
 
           availableAttachments.push({
             ...so,
-            itemCode: String(item.code || '').trim().toLowerCase(),
+            // Normalização de código: remove hífens/espaços
+            itemCode: String(item.itemCode || item.code || '').trim().toLowerCase().replace(/[^a-z0-9]/g, ''),
             itemQty: parsedQty,
             dateKey: soDateKey,
             cleanOS: cleanOS
@@ -145,11 +147,12 @@ function App() {
           
           const mDate = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
           const acc = accessories.find(a => String(a.id) === String(m.accessoryId));
-          const mCode = acc?.factoryCode ? String(acc.factoryCode).trim().toLowerCase() : null;
+          // Normalização de código: remove hífens/espaços
+          const mCode = acc?.factoryCode ? String(acc.factoryCode).trim().toLowerCase().replace(/[^a-z0-9]/g, '') : null;
           if (!mCode) { movementResults[m.id] = { targetStatus: 'pending', lastMatch: null }; return; }
           
           const mOS = (m.soNumber && String(m.soNumber).trim() !== '-' && String(m.soNumber).trim().toUpperCase() !== 'S/N' && String(m.soNumber).trim().toUpperCase() !== 'AVULSO')
-                      ? String(m.soNumber).trim().toLowerCase().replace(/^0+/, '') : null;
+                      ? String(m.soNumber).trim().toLowerCase().replace(/[^a-z0-9]/g, '').replace(/^0+/, '') : null;
           const rawMQty = String(m.quantity || 1);
           const mQty = parseInt(rawMQty.replace(/\D/g, '')) || 1;
 
