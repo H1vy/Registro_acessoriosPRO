@@ -58,13 +58,8 @@ function App() {
       const today = new Date().toLocaleDateString('sv-SE');
       
       // 1. Criamos um "Pool" único de todos os itens de anexos disponíveis
-      //    Ordenamos SOs por ID para garantir determinismo no pool.
-      const availableAttachments = [];
-      const sortedSOs = [...serviceOrders]
-        .filter(so => !so.annulled && !so.hidden)
-        .sort((a, b) => String(a.id).localeCompare(String(b.id)));
-
-      sortedSOs.forEach(so => {
+      let availableAttachments = [];
+      serviceOrders.filter(so => !so.annulled && !so.hidden).forEach(so => {
         (so.items || []).forEach(item => {
           // Calcula dateKey usando data LOCAL (igual ao mDate dos movimentos) para evitar desvio de fuso
           let soDateKey = so.withdrawalDate || null;
@@ -96,21 +91,32 @@ function App() {
         return true;
       });
 
+      // 4. Cada movimento é verificado INDIVIDUALMENTE pela sua própria quantidade.
+      //    Regra COM OS  → código + OS + data + qtd do movimento devem ser idênticos ao item do anexo
+      //    Regra AVULSO  → código + data + qtd idênticos; OS do anexo é ignorada
+      //    Processamento em ordem cronológica para garantir resultados determinísticos.
       // 4. Cada movimento é verificado em DUAS PASSAGENS.
       //    PASSAGEM 1: Prioriza matches EXATOS de quantidade.
       //    PASSAGEM 2: Faz o match por saldo (subtração) para o que sobrou.
+      
+      // Ordenação determinística do pool para evitar loops de reconciliação (Race Conditions)
+      const sortedPool = [...availableAttachments].sort((a, b) => {
+        const idComp = String(a.id).localeCompare(String(b.id));
+        if (idComp !== 0) return idComp;
+        return String(a.itemCode).localeCompare(String(b.itemCode));
+      });
+
       const movementResults = {};
       const sortedCandidates = [...candidateMovements].sort((a, b) => {
         const tA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
         const tB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
         if (tA !== tB) return tA - tB;
-        // Empate técnico no tempo -> usa ID para garantir ordem determinística
-        return String(a.id).localeCompare(String(b.id));
+        return String(a.id).localeCompare(String(b.id)); // Desempate estável
       });
 
       const processPass = (isExactOnly) => {
         sortedCandidates.forEach(m => {
-          if (movementResults[m.id]?.targetStatus === 'ok') return; // Já resolvido
+          if (movementResults[m.id]?.targetStatus === 'ok') return;
 
           const d = m.timestamp ? new Date(m.timestamp) : null;
           if (!d) { movementResults[m.id] = { targetStatus: 'pending', lastMatch: null }; return; }
@@ -124,26 +130,25 @@ function App() {
                       ? String(m.soNumber).trim().toLowerCase() : null;
           const mQty = Number(m.quantity || 1);
 
-          const matchIndex = availableAttachments.findIndex(a => {
+          const matchIndex = sortedPool.findIndex(a => {
             if (a.itemCode !== mCode) return false;
             if (a.dateKey !== mDate) return false;
             if (mOS !== null && mOS !== a.cleanOS) return false;
             
             if (isExactOnly) {
-              return a.itemQty === mQty; // Match EXATO
+              return a.itemQty === mQty;
             } else {
-              return a.itemQty >= mQty; // Match por SALDO
+              return a.itemQty >= mQty;
             }
           });
 
           if (matchIndex !== -1) {
-            const matchedItem = availableAttachments[matchIndex];
+            const matchedItem = sortedPool[matchIndex];
             movementResults[m.id] = { targetStatus: 'ok', lastMatch: { ...matchedItem } };
             
-            // Deduz a quantidade
             matchedItem.itemQty -= mQty;
             if (matchedItem.itemQty <= 0) {
-              availableAttachments.splice(matchIndex, 1);
+              sortedPool.splice(matchIndex, 1);
             }
           } else if (!isExactOnly) {
             movementResults[m.id] = { targetStatus: 'pending', lastMatch: null };
@@ -151,8 +156,8 @@ function App() {
         });
       };
 
-      processPass(true);  // Passagem 1: Matches exatos primeiro
-      processPass(false); // Passagem 2: Matches parciais/saldo depois
+      processPass(true);  // Exatos
+      processPass(false); // Parciais
 
       // 5. Aplica os resultados a cada movimento individualmente
       let changed = false;
@@ -162,27 +167,18 @@ function App() {
         if (!result) return m;
 
         const { targetStatus, lastMatch } = result;
-        
-        // Verificação Robusta de Mudança
-        const currentId = m.attachmentId || null;
-        const nextId = lastMatch ? lastMatch.id : null;
-        const currentStatus = m.attachmentStatus || 'pending';
-        const nextStatus = targetStatus || 'pending';
-        
-        const isOsCheckedIn = lastMatch && (lastMatch.checkIn || lastMatch.checkin);
-        const currentCheckin = !!m.checkin;
-        const nextCheckin = !!isOsCheckedIn;
-
-        const needsUpdate = currentStatus !== nextStatus || currentId !== nextId || (nextCheckin && !currentCheckin);
-
+        const needsUpdate = m.attachmentStatus !== targetStatus ||
+                           (lastMatch && m.attachmentId !== lastMatch.id) ||
+                           (lastMatch && (lastMatch.checkIn || lastMatch.checkin) && !m.checkin);
         if (needsUpdate) {
           changed = true;
+          const isOsCheckedIn = lastMatch && (lastMatch.checkIn || lastMatch.checkin);
           return {
             ...m,
-            attachmentStatus: nextStatus,
-            attachmentId: nextId,
-            attachedAt: lastMatch ? lastMatch.attachedAt : (nextStatus === 'pending' ? null : m.attachedAt),
-            attachedBy: lastMatch ? lastMatch.attachedBy : (nextStatus === 'pending' ? null : m.attachedBy),
+            attachmentStatus: targetStatus,
+            attachmentId: lastMatch ? lastMatch.id : (targetStatus === 'pending' ? null : m.attachmentId),
+            attachedAt: lastMatch ? lastMatch.attachedAt : (targetStatus === 'pending' ? null : m.attachedAt),
+            attachedBy: lastMatch ? lastMatch.attachedBy : (targetStatus === 'pending' ? null : m.attachedBy),
             checkin: isOsCheckedIn ? true : m.checkin,
             checkinAt: isOsCheckedIn ? (lastMatch.checkIn?.at || lastMatch.checkin?.at || lastMatch.checkIn?.timestamp || lastMatch.checkin?.timestamp) : m.checkinAt,
             checkinBy: isOsCheckedIn ? (lastMatch.checkIn?.user || lastMatch.checkin?.user) : m.checkinBy
@@ -192,10 +188,10 @@ function App() {
       });
 
       if (changed) {
-        // Comparação de segurança: evita salvar se o resultado final for idêntico (em JSON)
-        if (JSON.stringify(reconciledMovements) !== JSON.stringify(movements)) {
+        const timer = setTimeout(() => {
           saveData('movements', reconciledMovements);
-        }
+        }, 500); // Pequeno debounce para evitar loops de salvamento
+        return () => clearTimeout(timer);
       }
     }
   }, [movements, serviceOrders, accessories, currentUser]);
