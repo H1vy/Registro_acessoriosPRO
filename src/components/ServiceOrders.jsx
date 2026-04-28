@@ -152,36 +152,45 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
 
     let availablePool = [...pdfPool];
 
-    // 4. Cada movimento é verificado INDIVIDUALMENTE pela sua própria quantidade.
-    //    Regra COM OS  → OS do movimento deve ser idêntica à OS do anexo
-    //    Regra AVULSO  → vincula por código + quantidade, ignora OS do anexo
-    candidateMovements.forEach(m => {
-      const mOS = (m.soNumber && String(m.soNumber).trim() !== '-' && String(m.soNumber).trim().toUpperCase() !== 'S/N' && String(m.soNumber).trim().toUpperCase() !== 'AVULSO')
-        ? String(m.soNumber).trim().toLowerCase() : null;
+    // 4. Cada movimento é verificado em DUAS PASSAGENS.
+    const movementResults = {};
+    const processPass = (isExactOnly) => {
+      candidateMovements.forEach(m => {
+        if (movementResults[m.id] === 'ok') return;
 
-      if (mOS !== null && mOS !== osInForm) {
-        // Movimento COM OS diferente da OS do anexo → sem vínculo
-        movementResults[m.id] = 'pending';
-        return;
-      }
+        const mOS = (m.soNumber && String(m.soNumber).trim() !== '-' && String(m.soNumber).trim().toUpperCase() !== 'S/N' && String(m.soNumber).trim().toUpperCase() !== 'AVULSO')
+          ? String(m.soNumber).trim().toLowerCase() : null;
 
-      const mCode = accessories.find(acc => String(acc.id) === String(m.accessoryId))?.factoryCode?.trim().toLowerCase();
-      if (!mCode) {
-        movementResults[m.id] = 'pending';
-        return;
-      }
+        if (mOS !== null && mOS !== osInForm) {
+          movementResults[m.id] = 'pending';
+          return;
+        }
 
-      const mQty = Number(m.quantity || 1);
+        const mCode = accessories.find(acc => String(acc.id) === String(m.accessoryId))?.factoryCode?.trim().toLowerCase();
+        if (!mCode) { movementResults[m.id] = 'pending'; return; }
 
-      // Movimento COM OS igual à OS do anexo, OU AVULSO → vincula por código + qtd
-      const pdfIdx = availablePool.findIndex(p => p.code === mCode && p.quantity === mQty);
-      if (pdfIdx !== -1) {
-        availablePool.splice(pdfIdx, 1);
-        movementResults[m.id] = 'ok';
-      } else {
-        movementResults[m.id] = 'pending';
-      }
-    });
+        const mQty = Number(m.quantity || 1);
+
+        const pdfIdx = availablePool.findIndex(p => {
+          if (p.code !== mCode) return false;
+          return isExactOnly ? p.quantity === mQty : p.quantity >= mQty;
+        });
+
+        if (pdfIdx !== -1) {
+          const matchedPdf = availablePool[pdfIdx];
+          matchedPdf.quantity -= mQty;
+          if (matchedPdf.quantity <= 0) {
+            availablePool.splice(pdfIdx, 1);
+          }
+          movementResults[m.id] = 'ok';
+        } else if (!isExactOnly) {
+          movementResults[m.id] = 'pending';
+        }
+      });
+    };
+
+    processPass(true);  // Passagem 1: Matches exatos
+    processPass(false); // Passagem 2: Matches por saldo
 
     // 5. Aplica o resultado a cada movimento
     updatedMovements = updatedMovements.map(m => {

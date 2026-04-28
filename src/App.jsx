@@ -95,6 +95,9 @@ function App() {
       //    Regra COM OS  → código + OS + data + qtd do movimento devem ser idênticos ao item do anexo
       //    Regra AVULSO  → código + data + qtd idênticos; OS do anexo é ignorada
       //    Processamento em ordem cronológica para garantir resultados determinísticos.
+      // 4. Cada movimento é verificado em DUAS PASSAGENS.
+      //    PASSAGEM 1: Prioriza matches EXATOS de quantidade.
+      //    PASSAGEM 2: Faz o match por saldo (subtração) para o que sobrou.
       const movementResults = {};
       const sortedCandidates = [...candidateMovements].sort((a, b) => {
         const tA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
@@ -102,43 +105,51 @@ function App() {
         return tA - tB;
       });
 
-      sortedCandidates.forEach(m => {
-        const d = m.timestamp ? new Date(m.timestamp) : null;
-        if (!d) {
-          movementResults[m.id] = { targetStatus: 'pending', lastMatch: null };
-          return;
-        }
-        const mDate = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-        const acc = accessories.find(a => String(a.id) === String(m.accessoryId));
-        const mCode = acc?.factoryCode ? String(acc.factoryCode).trim().toLowerCase() : null;
-        if (!mCode) { movementResults[m.id] = { targetStatus: 'pending', lastMatch: null }; return; }
-        const mOS = (m.soNumber && String(m.soNumber).trim() !== '-' && String(m.soNumber).trim().toUpperCase() !== 'S/N' && String(m.soNumber).trim().toUpperCase() !== 'AVULSO')
-                    ? String(m.soNumber).trim().toLowerCase() : null;
-        const mQty = Number(m.quantity || 1);
+      const processPass = (isExactOnly) => {
+        sortedCandidates.forEach(m => {
+          if (movementResults[m.id]?.targetStatus === 'ok') return; // Já resolvido
 
-        const matchIndex = availableAttachments.findIndex(a => {
-          if (a.itemCode !== mCode) return false;
-          if (a.dateKey !== mDate) return false;
-          // Permite match se o anexo tiver quantidade igual ou superior ao movimento atual
-          if (a.itemQty < mQty) return false;
-          if (mOS !== null) return mOS === a.cleanOS;
-          return true; // AVULSO: ignora OS do anexo
-        });
-
-        if (matchIndex !== -1) {
-          const matchedItem = availableAttachments[matchIndex];
-          movementResults[m.id] = { targetStatus: 'ok', lastMatch: matchedItem };
+          const d = m.timestamp ? new Date(m.timestamp) : null;
+          if (!d) { movementResults[m.id] = { targetStatus: 'pending', lastMatch: null }; return; }
           
-          // Deduz a quantidade do movimento do saldo do anexo no pool
-          matchedItem.itemQty -= mQty;
-          // Remove o item do pool somente se o saldo chegar a zero
-          if (matchedItem.itemQty <= 0) {
-            availableAttachments.splice(matchIndex, 1);
+          const mDate = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+          const acc = accessories.find(a => String(a.id) === String(m.accessoryId));
+          const mCode = acc?.factoryCode ? String(acc.factoryCode).trim().toLowerCase() : null;
+          if (!mCode) { movementResults[m.id] = { targetStatus: 'pending', lastMatch: null }; return; }
+          
+          const mOS = (m.soNumber && String(m.soNumber).trim() !== '-' && String(m.soNumber).trim().toUpperCase() !== 'S/N' && String(m.soNumber).trim().toUpperCase() !== 'AVULSO')
+                      ? String(m.soNumber).trim().toLowerCase() : null;
+          const mQty = Number(m.quantity || 1);
+
+          const matchIndex = availableAttachments.findIndex(a => {
+            if (a.itemCode !== mCode) return false;
+            if (a.dateKey !== mDate) return false;
+            if (mOS !== null && mOS !== a.cleanOS) return false;
+            
+            if (isExactOnly) {
+              return a.itemQty === mQty; // Match EXATO
+            } else {
+              return a.itemQty >= mQty; // Match por SALDO
+            }
+          });
+
+          if (matchIndex !== -1) {
+            const matchedItem = availableAttachments[matchIndex];
+            movementResults[m.id] = { targetStatus: 'ok', lastMatch: { ...matchedItem } };
+            
+            // Deduz a quantidade
+            matchedItem.itemQty -= mQty;
+            if (matchedItem.itemQty <= 0) {
+              availableAttachments.splice(matchIndex, 1);
+            }
+          } else if (!isExactOnly) {
+            movementResults[m.id] = { targetStatus: 'pending', lastMatch: null };
           }
-        } else {
-          movementResults[m.id] = { targetStatus: 'pending', lastMatch: null };
-        }
-      });
+        });
+      };
+
+      processPass(true);  // Passagem 1: Matches exatos primeiro
+      processPass(false); // Passagem 2: Matches parciais/saldo depois
 
       // 5. Aplica os resultados a cada movimento individualmente
       let changed = false;
