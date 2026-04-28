@@ -40,6 +40,7 @@ export default function Movements({ movements, setMovements, accessories, respon
       author: currentUser?.username || 'Sistema',
       annulled: false,
       checkin: null,
+      type: 'checkout',
       attachmentStatus: 'pending' // Novo status inicial para conciliação
     }
 

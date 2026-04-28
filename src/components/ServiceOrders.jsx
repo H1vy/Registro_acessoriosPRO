@@ -121,14 +121,19 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
     let updatedMovements = [...movementsArray];
 
     // Normaliza a OS do formulário (null = avulso/S/N)
-    const osInForm = (osNumber && String(osNumber).trim() !== '-' && String(osNumber).trim().toUpperCase() !== 'S/N')
-      ? String(osNumber).trim().toLowerCase() : null;
+    const rawFormOS = String(osNumber || '').trim().toUpperCase();
+    const osInForm = (rawFormOS && rawFormOS !== '-' && rawFormOS !== 'S/N' && rawFormOS !== 'AVULSO')
+      ? String(osNumber).trim().toLowerCase().replace(/^0+/, '') : null;
 
-    // 1. Pool de itens do PDF (código normalizado + quantidade)
-    const pdfPool = items.map(item => ({
-      code: String(item.code || '').trim().toLowerCase(),
-      quantity: Number(item.quantity || 1)
-    }));
+    // 1. Pool de itens do PDF (código normalizado + quantidade robusta)
+    const pdfPool = items.map(item => {
+      const rawQty = String(item.quantity || 1);
+      const parsedQty = parseInt(rawQty.replace(/\D/g, '')) || 1;
+      return {
+        code: String(item.code || '').trim().toLowerCase(),
+        quantity: parsedQty
+      };
+    });
 
     // 2. Limpa vínculos anteriores desta O.S. para re-reconciliar do zero
     updatedMovements = updatedMovements.map(m => {
@@ -143,7 +148,7 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
     const candidateMovements = updatedMovements.filter(m => {
       if (m.isDeleted || (m.type && m.type !== 'checkout') || m.annulled) return false;
       if (m.attachmentStatus === 'ok' && m.attachmentId && m.attachmentId !== orderId) return false;
-      if (!m.timestamp) return false;
+      if (!m.timestamp || m.timestamp < '2026-04-27') return false;
 
       const d = new Date(m.timestamp);
       const mDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -163,17 +168,26 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
         if (movementResults[m.id] === 'ok') return;
 
         const mOS = (m.soNumber && String(m.soNumber).trim() !== '-' && String(m.soNumber).trim().toUpperCase() !== 'S/N' && String(m.soNumber).trim().toUpperCase() !== 'AVULSO')
-          ? String(m.soNumber).trim().toLowerCase() : null;
+          ? String(m.soNumber).trim().toLowerCase().replace(/^0+/, '') : null;
 
-        if (mOS !== null && mOS !== osInForm) {
-          movementResults[m.id] = 'pending';
-          return;
+        // Regra de O.S. idêntica ao App.jsx
+        if (mOS !== null) {
+          if (mOS !== osInForm) {
+            movementResults[m.id] = 'pending';
+            return;
+          }
+        } else {
+          if (osInForm !== null) {
+            movementResults[m.id] = 'pending';
+            return;
+          }
         }
 
         const mCode = accessories.find(acc => String(acc.id) === String(m.accessoryId))?.factoryCode?.trim().toLowerCase();
         if (!mCode) { movementResults[m.id] = 'pending'; return; }
 
-        const mQty = Number(m.quantity || 1);
+        const rawMQty = String(m.quantity || 1);
+        const mQty = parseInt(rawMQty.replace(/\D/g, '')) || 1;
 
         const pdfIdx = availablePool.findIndex(p => {
           if (p.code !== mCode) return false;
@@ -205,7 +219,8 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
           attachmentStatus: 'ok',
           attachmentId: orderId,
           attachedAt: new Date().toISOString(),
-          attachedBy: currentUser.username
+          attachedBy: currentUser.username,
+          withdrawalDate: withdrawalDate
         };
       }
       if (result === 'pending') {

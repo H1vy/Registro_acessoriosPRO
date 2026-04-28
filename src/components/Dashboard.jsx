@@ -319,6 +319,8 @@ export default function Dashboard({ movements, accessories, responsibles, orders
         'Nome Comercial': acc ? acc.commercialName : '(N/A)',
         'Responsável Saída': resp ? resp.name : '(Removido)',
         'Ordem de Serviço': m.soNumber || '-',
+        'Vínculo com Anexo': m.attachmentStatus === 'ok' ? 'SIM' : 'PENDENTE',
+        'Data Referência (PDF)': m.withdrawalDate || '-',
         'Autor Saída': m.author || 'Sistema',
         'Status Atual': m.isReturn ? 'RETORNO' : 'SAÍDA',
         'Justificativa Anulação': !m.isReturn ? (m.reason || '-') : 'N/A',
