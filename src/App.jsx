@@ -200,11 +200,74 @@ function App() {
           });
         } else {
           localStorage.setItem('ghost_checkin_cleanup_v2', '1');
-          console.log('[Cleanup v2] Nenhum registro fantasma encontrado. Timestamps nos movimentos:', movs.filter(m => m?.checkin?.timestamp).map(m => m.checkin.timestamp).slice(0,5));
+          console.log('[Cleanup v2] Nenhum registro fantasma encontrado.');
         }
       });
     }
 
+    // Limpeza única 27/04: remove check-ins realizados hoje (reverte para pendente)
+    if (!localStorage.getItem('checkin_rollback_2704')) {
+      getAllData('movements').then(movs => {
+        let changed = false;
+        const cleaned = movs.map(m => {
+          if (!m) return m;
+          
+          // Verifica check-in manual (objeto)
+          const manualCheckinDate = m.checkin?.timestamp ? new Date(m.checkin.timestamp).toISOString().split('T')[0] : null;
+          // Verifica check-in reconciliado (boolean + checkinAt)
+          const reconciledCheckinDate = m.checkinAt ? new Date(m.checkinAt).toISOString().split('T')[0] : null;
+
+          if (manualCheckinDate === '2026-04-27' || reconciledCheckinDate === '2026-04-27') {
+            changed = true;
+            return { ...m, checkin: null, checkinAt: null, checkinBy: null };
+          }
+          return m;
+        });
+
+        if (changed) {
+          saveData('movements', cleaned).then(() => {
+            localStorage.setItem('checkin_rollback_2704', '1');
+            console.log('[Rollback 27/04] Check-ins de hoje revertidos para pendente.');
+          });
+        } else {
+          localStorage.setItem('checkin_rollback_2704', '1');
+          console.log('[Rollback 27/04] Nenhum check-in encontrado para hoje.');
+        }
+      });
+    }
+
+    // Limpeza única 27/04 (Avulsos): remove os 2 registros fantasmas sem O.S. da aba Part Sales
+    if (!localStorage.getItem('ghost_cleanup_2704_avulso')) {
+      getAllData('movements').then(movs => {
+        let changed = false;
+        const cleaned = movs.map(m => {
+          if (!m || m.isDeleted) return m;
+          const d = new Date(m.timestamp);
+          const dateLocal = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+          const hh = d.getHours(), mm = d.getMinutes(), ss = d.getSeconds();
+          
+          const isTargetDate = dateLocal === '2026-04-27';
+          // GH44-02960A às 02:46:29 e 02:33:41
+          const isTargetTime = (hh === 2 && mm === 46 && ss === 29) || (hh === 2 && mm === 33 && ss === 41);
+          const isTargetCode = m.accessoryId === 'GH44-02960A' || m.itemCode === 'gh44-02960a';
+
+          if (isTargetDate && isTargetTime && isTargetCode) {
+            changed = true;
+            return { ...m, isDeleted: true, deletionReason: 'Ghost cleanup (requested)', deletedBy: 'Sistema' };
+          }
+          return m;
+        });
+
+        if (changed) {
+          saveData('movements', cleaned).then(() => {
+            localStorage.setItem('ghost_cleanup_2704_avulso', '1');
+            console.log('[Cleanup 27/04] 2 registros fantasmas marcados como excluídos.');
+          });
+        } else {
+          localStorage.setItem('ghost_cleanup_2704_avulso', '1');
+        }
+      });
+    }
     const savedUser = localStorage.getItem('currentUser')
     if (savedUser) {
       getAllData('users').then(users => {

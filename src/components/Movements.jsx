@@ -125,9 +125,9 @@ export default function Movements({ movements, setMovements, accessories, respon
     
     if (targets.length === 0) return;
 
-    const allRemovable = targets.every(m => m.annulled || m.checkin);
+    const allRemovable = targets.every(m => m.annulled || m.isReturn);
     if (!allRemovable) {
-      showAlert('Ação Não Permitida', 'Apenas registros que já foram ANULADOS ou FINALIZADOS (via Check-in ou Retorno) podem ser removidos do histórico.', 'danger')
+      showAlert('Ação Não Permitida', 'Apenas registros que já foram ANULADOS ou RETORNADOS podem ser removidos do histórico.', 'danger')
       return
     }
 

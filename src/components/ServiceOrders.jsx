@@ -172,7 +172,7 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
       }
 
       const mQty = Number(m.quantity || 1);
-      
+
       // Movimento COM OS igual à OS do anexo, OU AVULSO → vincula por código + qtd
       const pdfIdx = availablePool.findIndex(p => p.code === mCode && p.quantity === mQty);
       if (pdfIdx !== -1) {

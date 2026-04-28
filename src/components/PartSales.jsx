@@ -10,10 +10,11 @@ export default function PartSales({ movements, setMovements, accessories, respon
   
   // Filtragem por data
   const filteredByDate = movements.filter(m => {
+    if (!m || m.isDeleted) return false;
     if (!filterDate) return true;
     
     const mDate = m.timestamp ? new Date(m.timestamp).toISOString().split('T')[0] : null;
-    const cDate = (m.checkin && m.checkin.timestamp) ? new Date(m.checkin.timestamp).toISOString().split('T')[0] : null;
+    const cDate = (m.checkin?.timestamp || m.checkinAt) ? new Date(m.checkin?.timestamp || m.checkinAt).toISOString().split('T')[0] : null;
     
     // Para pendentes, filtramos pela data da saída
     // Para realizados, filtramos pela data do check-in (conforme lógica de "reset diário")
@@ -21,7 +22,11 @@ export default function PartSales({ movements, setMovements, accessories, respon
   });
 
   // Apenas registros de saída que não foram anulados/retornados
-  const activeMovements = filteredByDate.filter(m => !m.annulled && !m.checkin);
+  // REMOÇÃO: Escondemos itens com O.S. da aba Part Sales, pois eles pertencem ao fluxo de Service Orders
+  const activeMovements = filteredByDate.filter(m => 
+    !m.annulled && !m.checkin && 
+    (!m.soNumber || m.soNumber === '-' || m.soNumber.toUpperCase() === 'S/N' || m.soNumber.toUpperCase() === 'AVULSO')
+  );
   const checkedInMovements = filteredByDate.filter(m => m.checkin && !m.annulled);
 
   // Paginação para check-ins realizados
@@ -205,10 +210,10 @@ export default function PartSales({ movements, setMovements, accessories, respon
                       style={{ animationDelay: `${index * 50}ms` }}
                     >
                       <td style={{ fontWeight: 500, fontSize: '0.85rem', whiteSpace: 'nowrap', color: 'var(--text-primary)' }}>{getAccessoryLabel(m.accessoryId)}</td>
-                      <td style={{ fontSize: '0.85rem', whiteSpace: 'nowrap', fontWeight: 500 }}>{formatDate(m.checkin.timestamp)}</td>
+                      <td style={{ fontSize: '0.85rem', whiteSpace: 'nowrap', fontWeight: 500 }}>{formatDate(m.checkin?.timestamp || m.checkinAt)}</td>
                       <td style={{ whiteSpace: 'nowrap' }}>
                         <div className="badge badge-author">
-                          <User size={12} /> {m.checkin.author}
+                          <User size={12} /> {m.checkin?.author || m.checkinBy || 'Sistema'}
                         </div>
                       </td>
                     </tr>
