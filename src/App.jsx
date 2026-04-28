@@ -164,9 +164,9 @@ function App() {
             // Se o movimento é AVULSO, ele só pode casar com anexos sem O.S. (ou marcados como Avulso)
             if (mOS !== null) {
               if (mOS !== a.cleanOS) return false;
-            } else {
-              if (a.cleanOS !== null) return false;
             }
+            // Se o movimento é AVULSO (mOS === null), ignoramos a checagem de O.S. do anexo
+            // para permitir o vínculo por Código + Data + Quantidade.
             
             if (isExactOnly) {
               return a.itemQty === mQty;

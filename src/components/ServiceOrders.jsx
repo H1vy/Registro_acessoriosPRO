@@ -176,12 +176,8 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
             movementResults[m.id] = 'pending';
             return;
           }
-        } else {
-          if (osInForm !== null) {
-            movementResults[m.id] = 'pending';
-            return;
-          }
         }
+        // Se mOS é null (Avulso), ele pode casar com qualquer OS do PDF
 
         const mCode = accessories.find(acc => String(acc.id) === String(m.accessoryId))?.factoryCode?.trim().toLowerCase();
         if (!mCode) { movementResults[m.id] = 'pending'; return; }
