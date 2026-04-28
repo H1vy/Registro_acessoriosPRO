@@ -128,33 +128,35 @@ function App() {
       });
 
       const movementResults = {};
+      // Inicialização: Todos os candidatos começam como pendentes
+      candidateMovements.forEach(m => {
+        movementResults[m.id] = { targetStatus: 'pending', lastMatch: null };
+      });
+
       const sortedCandidates = [...candidateMovements].sort((a, b) => {
         const tA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
         const tB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
         if (tA !== tB) return tA - tB;
-        return String(a.id).localeCompare(String(b.id)); // Desempate estável
+        return String(a.id).localeCompare(String(b.id)); 
       });
 
       const processPass = (isExactOnly, passType) => {
         sortedCandidates.forEach(m => {
+          // Se já casou em uma passagem anterior de maior prioridade, ignora
           if (movementResults[m.id]?.targetStatus === 'ok') return;
 
           const d = m.timestamp ? new Date(m.timestamp) : null;
-          if (!d || isNaN(d.getTime())) { 
-            movementResults[m.id] = { targetStatus: 'pending', lastMatch: null }; 
-            return; 
-          }
+          if (!d || isNaN(d.getTime())) return;
           
           const mDate = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
           const acc = accessories.find(a => String(a.id) === String(m.accessoryId));
-          // Normalização de código: remove hífens/espaços
           const mCode = acc?.factoryCode ? String(acc.factoryCode).trim().toLowerCase().replace(/[^a-z0-9]/g, '') : null;
-          if (!mCode) { movementResults[m.id] = { targetStatus: 'pending', lastMatch: null }; return; }
+          if (!mCode) return;
           
           const mOS = (m.soNumber && String(m.soNumber).trim() !== '-' && String(m.soNumber).trim().toUpperCase() !== 'S/N' && String(m.soNumber).trim().toUpperCase() !== 'AVULSO')
                       ? String(m.soNumber).trim().toLowerCase().replace(/[^a-z0-9]/g, '').replace(/^0+/, '') : null;
           
-          // FILTRO DE PASSAGEM: Prioridade para O.S.
+          // FILTRO DE PASSAGEM
           if (passType === 'os' && mOS === null) return;
           if (passType === 'avulso' && mOS !== null) return;
 
@@ -163,24 +165,13 @@ function App() {
 
           const matchIndex = sortedPool.findIndex(a => {
             if (a.itemCode !== mCode) return false;
-            
-            // Match de Data (String literal)
             if (a.dateKey !== mDate) return false;
             
-            // Match de O.S.
             if (mOS !== null) {
-              // Movimento com OS: deve ser idêntico ao anexo
               if (mOS !== a.cleanOS) return false;
-            } else {
-              // Movimento Avulso: Ignoramos a OS do anexo para permitir vínculo flexível, 
-              // mas este movimento só roda nas passagens 2 e 4 (após as OS oficiais terem prioridade).
             }
             
-            if (isExactOnly) {
-              return a.itemQty === mQty;
-            } else {
-              return a.itemQty >= mQty;
-            }
+            return isExactOnly ? a.itemQty === mQty : a.itemQty >= mQty;
           });
 
           if (matchIndex !== -1) {
@@ -191,18 +182,11 @@ function App() {
             if (matchedItem.itemQty <= 0) {
               sortedPool.splice(matchIndex, 1);
             }
-          } else if (passType === 'avulso' && !isExactOnly) {
-            // Só marca como pendente definitivo após a última passagem (Avulso Parcial)
-            movementResults[m.id] = { targetStatus: 'pending', lastMatch: null };
           }
         });
       };
 
-      // ORDEM DE PRIORIDADE CRITICAL:
-      // 1. Matches Exatos com O.S. (Garante que OS 777333 pegue o anexo 777333)
-      // 2. Matches Exatos Avulsos (O que sobrar e bater código/data)
-      // 3. Matches Parciais com O.S. (Para quantidades quebradas)
-      // 4. Matches Parciais Avulsos (Última tentativa)
+      // ORDEM DE PRIORIDADE ESTRITA (DETERMINÍSTICA)
       processPass(true, 'os');
       processPass(true, 'avulso');
       processPass(false, 'os');
