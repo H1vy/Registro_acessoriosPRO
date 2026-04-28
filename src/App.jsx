@@ -200,26 +200,41 @@ function App() {
         if (!result) return m;
 
         const { targetStatus, lastMatch } = result;
+        
+        // Normalização para comparação estável (null vs undefined vs "")
         const currentId = m.attachmentId || null;
         const targetId = lastMatch ? lastMatch.id : null;
+        const currentStatus = m.attachmentStatus || 'pending';
+        const targetStatusNormalized = targetStatus || 'pending';
 
-        const needsUpdate = m.attachmentStatus !== targetStatus ||
+        // Migração de tipo segura (apenas se for um checkout provável)
+        const needsTypeMigration = !m.type && m.accessoryId && !m.checkinAt && !m.returnedBy;
+
+        const needsUpdate = currentStatus !== targetStatusNormalized ||
                            currentId !== targetId ||
-                           (!m.type && m.accessoryId) || // Migração de tipo
+                           needsTypeMigration ||
                            (lastMatch && (lastMatch.checkIn || lastMatch.checkin) && !m.checkin) ||
                            (lastMatch && String(m.withdrawalDate || '') !== String(lastMatch.withdrawalDate || ''));
 
         if (needsUpdate) {
           changed = true;
           const isOsCheckedIn = lastMatch && (lastMatch.checkIn || lastMatch.checkin);
+          
+          // Log para depuração (visível no console do desenvolvedor)
+          console.log(`[Reconciler] Change detected in ${m.id}:`, {
+            field: currentStatus !== targetStatusNormalized ? 'status' : (currentId !== targetId ? 'attachmentId' : 'other'),
+            old: { status: currentStatus, id: currentId },
+            new: { status: targetStatusNormalized, id: targetId }
+          });
+
           return {
             ...m,
-            type: m.type || 'checkout', // Migração garantida
-            attachmentStatus: targetStatus,
+            type: m.type || 'checkout', 
+            attachmentStatus: targetStatusNormalized,
             attachmentId: targetId,
-            attachedAt: lastMatch ? lastMatch.attachedAt : (targetStatus === 'pending' ? null : m.attachedAt),
-            attachedBy: lastMatch ? lastMatch.attachedBy : (targetStatus === 'pending' ? null : m.attachedBy),
-            withdrawalDate: lastMatch ? lastMatch.withdrawalDate : (targetStatus === 'pending' ? null : m.withdrawalDate),
+            attachedAt: lastMatch ? lastMatch.attachedAt : (targetStatusNormalized === 'pending' ? null : m.attachedAt),
+            attachedBy: lastMatch ? lastMatch.attachedBy : (targetStatusNormalized === 'pending' ? null : m.attachedBy),
+            withdrawalDate: lastMatch ? lastMatch.withdrawalDate : (targetStatusNormalized === 'pending' ? null : m.withdrawalDate),
             checkin: isOsCheckedIn ? (m.checkin && typeof m.checkin === 'object' ? m.checkin : isOsCheckedIn) : m.checkin,
             checkinAt: isOsCheckedIn ? (lastMatch.checkIn?.at || lastMatch.checkin?.at || lastMatch.checkIn?.timestamp || lastMatch.checkin?.timestamp) : m.checkinAt,
             checkinBy: isOsCheckedIn ? (lastMatch.checkIn?.user || lastMatch.checkin?.user) : m.checkinBy
@@ -229,9 +244,11 @@ function App() {
       });
 
       if (changed) {
+        // Debounce de 800ms para garantir que o Firebase processou a leitura anterior
         const timer = setTimeout(() => {
           saveData('movements', reconciledMovements);
-        }, 500); // Pequeno debounce para evitar loops de salvamento
+          console.log('[Reconciler] Batch update saved to database.');
+        }, 800);
         return () => clearTimeout(timer);
       }
     }
