@@ -153,7 +153,6 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
     let availablePool = [...pdfPool];
 
     // 4. Cada movimento é verificado em DUAS PASSAGENS.
-    const movementResults = {};
     const processPass = (isExactOnly) => {
       candidateMovements.forEach(m => {
         if (movementResults[m.id] === 'ok') return;
