@@ -162,18 +162,27 @@ function App() {
         if (!result) return m;
 
         const { targetStatus, lastMatch } = result;
-        const needsUpdate = m.attachmentStatus !== targetStatus ||
-                           (lastMatch && m.attachmentId !== lastMatch.id) ||
-                           (lastMatch && (lastMatch.checkIn || lastMatch.checkin) && !m.checkin);
+        
+        // Verificação Robusta de Mudança
+        const currentId = m.attachmentId || null;
+        const nextId = lastMatch ? lastMatch.id : null;
+        const currentStatus = m.attachmentStatus || 'pending';
+        const nextStatus = targetStatus || 'pending';
+        
+        const isOsCheckedIn = lastMatch && (lastMatch.checkIn || lastMatch.checkin);
+        const currentCheckin = !!m.checkin;
+        const nextCheckin = !!isOsCheckedIn;
+
+        const needsUpdate = currentStatus !== nextStatus || currentId !== nextId || (nextCheckin && !currentCheckin);
+
         if (needsUpdate) {
           changed = true;
-          const isOsCheckedIn = lastMatch && (lastMatch.checkIn || lastMatch.checkin);
           return {
             ...m,
-            attachmentStatus: targetStatus,
-            attachmentId: lastMatch ? lastMatch.id : (targetStatus === 'pending' ? null : m.attachmentId),
-            attachedAt: lastMatch ? lastMatch.attachedAt : (targetStatus === 'pending' ? null : m.attachedAt),
-            attachedBy: lastMatch ? lastMatch.attachedBy : (targetStatus === 'pending' ? null : m.attachedBy),
+            attachmentStatus: nextStatus,
+            attachmentId: nextId,
+            attachedAt: lastMatch ? lastMatch.attachedAt : (nextStatus === 'pending' ? null : m.attachedAt),
+            attachedBy: lastMatch ? lastMatch.attachedBy : (nextStatus === 'pending' ? null : m.attachedBy),
             checkin: isOsCheckedIn ? true : m.checkin,
             checkinAt: isOsCheckedIn ? (lastMatch.checkIn?.at || lastMatch.checkin?.at || lastMatch.checkIn?.timestamp || lastMatch.checkin?.timestamp) : m.checkinAt,
             checkinBy: isOsCheckedIn ? (lastMatch.checkIn?.user || lastMatch.checkin?.user) : m.checkinBy
@@ -183,7 +192,10 @@ function App() {
       });
 
       if (changed) {
-        saveData('movements', reconciledMovements);
+        // Comparação de segurança: evita salvar se o resultado final for idêntico (em JSON)
+        if (JSON.stringify(reconciledMovements) !== JSON.stringify(movements)) {
+          saveData('movements', reconciledMovements);
+        }
       }
     }
   }, [movements, serviceOrders, accessories, currentUser]);
