@@ -148,7 +148,12 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
       const d = new Date(m.timestamp);
       const mDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
       return mDate === withdrawalDate;
-    }).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    }).sort((a, b) => {
+      const tA = new Date(a.timestamp).getTime();
+      const tB = new Date(b.timestamp).getTime();
+      if (tA !== tB) return tA - tB;
+      return String(a.id).localeCompare(String(b.id));
+    });
 
     let availablePool = [...pdfPool];
 

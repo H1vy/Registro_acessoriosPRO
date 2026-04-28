@@ -58,8 +58,13 @@ function App() {
       const today = new Date().toLocaleDateString('sv-SE');
       
       // 1. Criamos um "Pool" único de todos os itens de anexos disponíveis
-      let availableAttachments = [];
-      serviceOrders.filter(so => !so.annulled && !so.hidden).forEach(so => {
+      //    Ordenamos SOs por ID para garantir determinismo no pool.
+      const availableAttachments = [];
+      const sortedSOs = [...serviceOrders]
+        .filter(so => !so.annulled && !so.hidden)
+        .sort((a, b) => String(a.id).localeCompare(String(b.id)));
+
+      sortedSOs.forEach(so => {
         (so.items || []).forEach(item => {
           // Calcula dateKey usando data LOCAL (igual ao mDate dos movimentos) para evitar desvio de fuso
           let soDateKey = so.withdrawalDate || null;
@@ -91,10 +96,6 @@ function App() {
         return true;
       });
 
-      // 4. Cada movimento é verificado INDIVIDUALMENTE pela sua própria quantidade.
-      //    Regra COM OS  → código + OS + data + qtd do movimento devem ser idênticos ao item do anexo
-      //    Regra AVULSO  → código + data + qtd idênticos; OS do anexo é ignorada
-      //    Processamento em ordem cronológica para garantir resultados determinísticos.
       // 4. Cada movimento é verificado em DUAS PASSAGENS.
       //    PASSAGEM 1: Prioriza matches EXATOS de quantidade.
       //    PASSAGEM 2: Faz o match por saldo (subtração) para o que sobrou.
@@ -102,7 +103,9 @@ function App() {
       const sortedCandidates = [...candidateMovements].sort((a, b) => {
         const tA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
         const tB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
-        return tA - tB;
+        if (tA !== tB) return tA - tB;
+        // Empate técnico no tempo -> usa ID para garantir ordem determinística
+        return String(a.id).localeCompare(String(b.id));
       });
 
       const processPass = (isExactOnly) => {
