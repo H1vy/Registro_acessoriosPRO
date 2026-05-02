@@ -553,6 +553,11 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   animation: selectFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+body.light-mode .custom-select-options {
+  box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.12);
+  border-color: rgba(148, 163, 184, 0.25);
+}
+
 @keyframes selectFadeIn {
   from { opacity: 0; transform: translateY(-10px); }
   to { opacity: 1; transform: translateY(0); }
@@ -1644,6 +1649,12 @@ body.dark-mode .login-overlay.admin .input-with-icon > svg {
   overflow: hidden;
 }
 
+body.light-mode .modal-card {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  box-shadow: 0 40px 80px -15px rgba(15, 23, 42, 0.15), 0 0 0 1px rgba(148, 163, 184, 0.1);
+}
+
 @keyframes modalSlideUp {
   from { opacity: 0; transform: translateY(20px) scale(0.95); }
   to { opacity: 1; transform: translateY(0) scale(1); }
@@ -1673,18 +1684,25 @@ body.dark-mode .login-overlay.admin .input-with-icon > svg {
 
 .modal-close-btn {
   position: absolute;
-  top: 1.5rem;
-  right: 1.5rem;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  top: 1.25rem;
+  right: 1.25rem;
+  width: 36px;
+  height: 36px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  padding: 0.5rem;
+  padding: 0;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+body.light-mode .modal-close-btn {
+  background: rgba(15, 23, 42, 0.05);
+  border: 1px solid rgba(148, 163, 184, 0.2);
 }
 
 .modal-close-btn:hover {
@@ -1857,4 +1875,155 @@ body.dark-mode .login-overlay.admin .input-with-icon > svg {
   .card {
     padding: 1rem;
   }
+}
+
+/* ══════════════════════════════════════════════
+   CONFIRM MODAL — CLASSES TEMÁTICAS
+══════════════════════════════════════════════ */
+.confirm-modal-card {
+  padding: 2.5rem 2rem 2rem;
+  text-align: center;
+}
+
+.confirm-modal-icon {
+  padding: 14px;
+  border-radius: 18px;
+  display: inline-flex;
+}
+
+.confirm-modal-icon.danger {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.confirm-modal-icon.success {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.confirm-modal-icon.edit,
+.confirm-modal-icon.warning {
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.2);
+}
+
+.confirm-modal-title {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin-bottom: 0.75rem;
+  letter-spacing: -0.02em;
+}
+
+.confirm-modal-message {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  line-height: 1.5;
+  max-width: 90%;
+  margin: 0 auto;
+}
+
+.confirm-modal-select-list {
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--bg-input);
+  scrollbar-width: thin;
+}
+
+.confirm-modal-empty {
+  padding: 1.5rem;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  opacity: 0.6;
+}
+
+.confirm-modal-select-option {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: transparent;
+  border: none;
+  border-left: 3px solid transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s;
+  color: var(--text-secondary);
+}
+
+.confirm-modal-select-option:hover {
+  background: var(--accent-light);
+}
+
+.confirm-modal-select-option.selected {
+  background: var(--accent-light);
+  border-left-color: var(--accent);
+}
+
+.confirm-modal-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: #fff;
+}
+
+.confirm-modal-option-label {
+  flex: 1;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.confirm-modal-option-label.selected {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.confirm-modal-input {
+  width: 100%;
+  margin-top: 1.25rem;
+  padding: 0.85rem 1.1rem;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  color: var(--text-primary);
+  outline: none;
+}
+
+.confirm-modal-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-light);
+}
+
+/* Botão de confirmação do modal */
+.confirm-modal-confirm {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 25px rgba(56, 189, 248, 0.2);
+  backdrop-filter: blur(4px);
+}
+
+.confirm-modal-confirm.is-danger {
+  background: rgba(239, 68, 68, 0.9) !important;
+  color: #fff !important;
+  box-shadow: 0 8px 25px rgba(239, 68, 68, 0.4);
+}
+
+.confirm-modal-confirm.is-success {
+  background: rgba(16, 185, 129, 0.9) !important;
+  color: #fff !important;
+  box-shadow: 0 8px 25px rgba(16, 185, 129, 0.3);
+}
+
+body.light-mode .confirm-modal-confirm {
+  border: 1px solid rgba(148, 163, 184, 0.15);
 }

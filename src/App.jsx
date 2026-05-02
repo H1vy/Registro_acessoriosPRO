@@ -785,6 +785,13 @@ function App() {
               setActiveTab={setActiveTab}
             />
 
+            {/* Notificações de Pedidos Prontos para Retirada */}
+            <ReadyForPickupNotifications
+              orders={orders}
+              accessories={accessories}
+              setActiveTab={setActiveTab}
+            />
+
             <button
               className="btn-icon-secondary"
               title={theme === 'dark' ? 'Mudar para Tema Claro' : 'Mudar para Tema Escuro'}
@@ -901,6 +908,110 @@ function PendingNotifications({ movements, accessories, setActiveTab }) {
       {isOpen && pending.length === 0 && (
         <div className="notification-dropdown glass-effect" style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
           Tudo em dia! Nenhuma pendência encontrada.
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ReadyForPickupNotifications({ orders, accessories, setActiveTab }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  // Agrupa pedidos prontos (status=3) por O.S.
+  const readyGroups = React.useMemo(() => {
+    const groups = {};
+    orders.forEach(o => {
+      if (o.status !== 3 || o.annulled || o.removed) return;
+      if (!groups[o.osNumber]) {
+        groups[o.osNumber] = {
+          osNumber: o.osNumber,
+          clientName: o.clientName,
+          readySince: o.readyRegisteredAt || o.updatedAt,
+          items: []
+        };
+      }
+      const acc = accessories.find(a => a.id === o.accessoryId);
+      groups[o.osNumber].items.push({
+        id: o.id,
+        name: o.accessoryName || acc?.commercialName || 'Desconhecido',
+        code: acc?.factoryCode || '??'
+      });
+    });
+    return Object.values(groups).sort((a, b) => new Date(b.readySince) - new Date(a.readySince));
+  }, [orders, accessories]);
+
+  const totalReady = readyGroups.reduce((sum, g) => sum + g.items.length, 0);
+
+  // Fecha dropdown ao clicar fora
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setIsOpen(false);
+      }
+    };
+    if (isOpen) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen]);
+
+  return (
+    <div className="notification-container" ref={dropdownRef}>
+      <button
+        className={`btn-icon-secondary notification-bell ${totalReady > 0 ? 'has-ready' : ''}`}
+        onClick={() => setIsOpen(!isOpen)}
+        title="Pedidos Prontos para Retirada"
+        style={{ opacity: totalReady === 0 ? 0.3 : 1, position: 'relative' }}
+      >
+        <Package size={20} />
+        {totalReady > 0 && <span className="badge-notification ready-badge">{totalReady}</span>}
+      </button>
+
+      {isOpen && totalReady > 0 && (
+        <div className="notification-dropdown glass-effect ready-dropdown">
+          <div className="notification-header">
+            <h4 style={{ color: '#22c55e' }}>📦 Prontos para Retirada</h4>
+            <button className="btn-close-mini" onClick={() => setIsOpen(false)}><X size={14} /></button>
+          </div>
+          <div className="notification-list custom-scrollbar">
+            {readyGroups.map(group => (
+              <div
+                key={group.osNumber}
+                className="notification-item ready-item"
+                onClick={() => { setActiveTab('orders'); setIsOpen(false); }}
+              >
+                <div className="notif-info">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div className="notif-icon-wrapper" style={{ background: 'rgba(34, 197, 94, 0.15)', borderColor: 'rgba(34, 197, 94, 0.3)', color: '#22c55e' }}>
+                      <Package size={14} />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <span className="notif-code">O.S. {group.osNumber}</span>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 500 }}>{group.clientName}</span>
+                    </div>
+                  </div>
+                  <span className="notif-date">{new Date(group.readySince).toLocaleDateString('pt-BR')}</span>
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '6px' }}>
+                  {group.items.map(item => (
+                    <span key={item.id} style={{
+                      fontSize: '0.7rem', fontWeight: 700, padding: '2px 8px',
+                      background: 'rgba(34, 197, 94, 0.1)', color: '#22c55e',
+                      borderRadius: '6px', border: '1px solid rgba(34, 197, 94, 0.2)'
+                    }}>{item.code}</span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+          <button className="btn-view-all" style={{ background: 'linear-gradient(135deg, #22c55e, #16a34a)', boxShadow: '0 4px 15px rgba(34, 197, 94, 0.3)' }} onClick={() => { setActiveTab('orders'); setIsOpen(false); }}>
+            Ir para Pedidos
+          </button>
+        </div>
+      )}
+
+      {isOpen && totalReady === 0 && (
+        <div className="notification-dropdown glass-effect" style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
+          Nenhum pedido pronto para retirada no momento.
         </div>
       )}
     </div>

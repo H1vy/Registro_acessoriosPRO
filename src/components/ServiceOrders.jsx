@@ -611,8 +611,8 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
                 justifyContent: 'space-between',
                 alignItems: 'center',
                 cursor: 'pointer',
-                background: isActive ? `${kpi.color}20` : 'rgba(255,255,255,0.03)',
-                borderColor: isActive ? kpi.color : 'rgba(255,255,255,0.05)',
+                background: isActive ? `${kpi.color}20` : 'var(--bg-input)',
+                borderColor: isActive ? kpi.color : 'var(--border)',
                 transform: isActive ? 'translateY(-2px)' : 'none',
                 boxShadow: isActive ? `0 8px 24px -8px ${kpi.color}40` : 'none',
                 transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
@@ -643,7 +643,7 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
           />
         </div>
 
-        <div className="date-filter-wrapper" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: 'rgba(255,255,255,0.03)', padding: '0.5rem 1rem', borderRadius: '12px', border: '1px solid var(--border)' }}>
+        <div className="date-filter-wrapper" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: 'var(--bg-input)', padding: '0.5rem 1rem', borderRadius: '12px', border: '1px solid var(--border)' }}>
           <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Filtrar por Data:</label>
           <input
             type="date"
@@ -901,7 +901,7 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
                   />
                 </div>
               </div>
-              <div className="paired-input-row" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.6fr)', background: 'rgba(255,255,255,0.03)', padding: '1rem', borderRadius: '16px', marginBottom: '1.5rem', border: '1px solid rgba(255,255,255,0.05)', gap: '1rem' }}>
+              <div className="paired-input-row" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.6fr)', background: 'var(--bg-input)', padding: '1rem', borderRadius: '16px', marginBottom: '1.5rem', border: '1px solid var(--border)', gap: '1rem' }}>
                 <div className="input-group" style={{ marginBottom: 0 }}>
                   <label>1. Selecione a Peça</label>
                   <div className="searchable-select-container" ref={accDropdownRef}>
@@ -1207,7 +1207,7 @@ const ServiceOrders = ({ serviceOrders, setServiceOrders, accessories, movements
                 </div>
               </div>
 
-              <div className="paired-input-row" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.6fr)', background: 'rgba(255,255,255,0.03)', padding: '1rem', borderRadius: '16px', marginBottom: '1.5rem', border: '1px solid rgba(255,255,255,0.05)', gap: '1rem' }}>
+              <div className="paired-input-row" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.6fr)', background: 'var(--bg-input)', padding: '1rem', borderRadius: '16px', marginBottom: '1.5rem', border: '1px solid var(--border)', gap: '1rem' }}>
                 <div className="input-group" style={{ marginBottom: 0 }}>
                   <label>Adicionar Peça</label>
                   <div className="searchable-select-container" ref={accDropdownRef}>
